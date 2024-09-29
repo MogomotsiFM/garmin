@@ -49,6 +49,8 @@ def predictOutcome(poly):
             # Model the collision
             xs, ys = predictFlightPathPostCollision(poly, (x, y), (-RR, HR))
 
+            outcome = predictOutcomePostCollision(xs, ys)
+
             return outcome, x, y
         elif poly(-RR - DB) < (HR + HB):
             # Ball bounces of the backboard. We must model this.
@@ -69,6 +71,34 @@ def predictOutcome(poly):
         outcome = "Undershot"
 
     return outcome, None, None
+
+
+def predictOutcomePostCollision(xs, ys):
+    '''
+        Our model for the behaviour of the ball post-collision is fairly good in the first few centi-meters.
+        Anything beyond that it break down. To improve it we would have to keep track of the time in flight
+        and then use it to estimate the velocity. This statement is to justify our assumption that 
+        the path after the collision is monotonic.
+    '''
+    path = Poly.fit(xs, ys, deg=2)
+
+    # Compute the gradient at the center of the rim
+    deriv = path.deriv()
+    grad = deriv(0)
+
+    if grad > 0:
+        return "Ball bounced of the rim."
+    
+    else:
+        left_y = path(RR)
+        right_y = path(-RR)
+
+        # Because the post collision path is monotonic it is enough to check at the edges if the center of the 
+        # ball is less than the height of the rim.
+        if left_y <= HR or right_y <= HR:
+            return "Score."
+        else:
+            return "Ball bounced of the rim."
 
 
 def findPositionOfBallCollidingWithRimEdge(poly: Poly, x_rim, y_rim):
@@ -327,7 +357,8 @@ for i in range(1, 7):
     x, y = transformToCartesianCoordinates(dist1, dist2)
 
     # (Least squares) Fit the data to a second order polynomial
-    poly = Poly.fit(x, y, deg=2, domain=[-15, 15], window=[-15, 15])
+    start = x[0] + 1
+    poly = Poly.fit(x, y, deg=2, domain=[-15, start], window=[-15, start])
 
     # If x_c and y_c exist then they represent the center of the ball that 
     # collides with either the ring or backboarc
