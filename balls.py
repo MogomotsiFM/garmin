@@ -159,13 +159,13 @@ def ballCollisionWithEdgeModel(path: Poly, center, collision_pnt):
     gamma = computeAngleBetweenTwoLines(ball_tangent_grad, path_tangent_grad)
     
     # Actually adjust the flight path to take into account the direction of the ball
-    new_xs, new_ys = rotate(new_xs, new_ys, gamma)
+    post_collision_xs, post_collision_ys = rotate(new_xs, new_ys, gamma)
     
     # Finally, undo the initial translation
-    new_xs = new_xs + trans[0]
-    new_ys = new_ys + trans[1]
+    post_collision_xs = post_collision_xs + trans[0]
+    post_collision_ys = post_collision_ys + trans[1]
 
-    axes.plot(new_xs, new_ys)
+    axes.plot(post_collision_xs, post_collision_ys)
 
     # The line tangent to the ball at the point of colllision
     c = y_r - ball_tangent_grad*x_r
@@ -184,7 +184,7 @@ def ballCollisionWithEdgeModel(path: Poly, center, collision_pnt):
 
     plt.show()
 
-    return new_xs, new_ys
+    return post_collision_xs, post_collision_ys
 
 
 def rotate(xs, ys, theta):
