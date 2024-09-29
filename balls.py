@@ -33,7 +33,7 @@ def readDistances(data, header):
     return dist
 
 
-def assessOutcome(poly):
+def predictOutcome(poly):
     if poly(RR) > (HR + R):
         # Ball passes above the rim
         if poly(-RR) < (HR - R):
@@ -47,7 +47,7 @@ def assessOutcome(poly):
             x, y = findPositionOfBallCollidingWithRimEdge(poly, -RR, HR)
 
             # Model the collision
-            outcome = ballCollisionWithEdgeModel(poly, (x, y), (-RR, HR))
+            xs, ys = predictFlightPathPostCollision(poly, (x, y), (-RR, HR))
 
             return outcome, x, y
         elif poly(-RR - DB) < (HR + HB):
@@ -99,7 +99,7 @@ def findPositionOfBallCollidingWithRimEdge(poly: Poly, x_rim, y_rim):
     return correct_root[0], poly(correct_root[0])
 
 
-def ballCollisionWithEdgeModel(path: Poly, center, collision_pnt):
+def predictFlightPathPostCollision(path: Poly, center, collision_pnt):
     '''
         Input:
             path: The polynomial that models the path followed by a ball,
@@ -331,7 +331,7 @@ for i in range(1, 7):
 
     # If x_c and y_c exist then they represent the center of the ball that 
     # collides with either the ring or backboarc
-    outcome, x_c, y_c = assessOutcome(poly)
+    outcome, x_c, y_c = predictOutcome(poly)
     print("Assessment: ", outcome)
 
     xs = np.linspace(-1, 10, 100)
