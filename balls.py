@@ -126,30 +126,20 @@ def ballCollisionWithEdgeModel(path: Poly, center, collision_pnt):
     xs = np.linspace(x_center, -5, 20)
     ys = path(xs)
 
-    figure, axes = plt.subplots()
-    axes.set_aspect(1)
-
-    # We need this in order to display the entire flight path of the ball
-    x_ = np.linspace(-5, 15, 50)
-    axes.plot(x_, path(x_))
-
     # Translate the points past the predicted collision point so that they can be rotated about the origin
     xs = xs - trans[0]
     ys = ys - trans[1]
 
     # Rotate the points such that the tangent of the ball at the collision point is parallel to the y-axis
     trans_xs, trans_ys = rotate(xs, ys, theta)
-    axes.plot(trans_xs, trans_ys)
 
     # Reflect the path about the y-axis to model the ball bouncing off a wall
     # This is really the what we wanted to get at!!
-    trans_xs = np.abs(trans_xs)
-    axes.plot(trans_xs, trans_ys)
+    reflected_xs = np.abs(trans_xs)
+    reflected_ys = trans_ys
 
     # Undo the first rotation
-    new_xs, new_ys = rotate(trans_xs, trans_ys, -theta)
-
-    axes.plot(new_xs, new_ys)
+    new_xs, new_ys = rotate(reflected_xs, reflected_ys, -theta)
 
     # We need to tamper these with the direction of flight of the ball at time of collision
     # Hence we compute the gradient of the path at that point
@@ -165,13 +155,46 @@ def ballCollisionWithEdgeModel(path: Poly, center, collision_pnt):
     post_collision_xs = post_collision_xs + trans[0]
     post_collision_ys = post_collision_ys + trans[1]
 
+    plotDebugGraphs(path,
+                    trans_xs, trans_ys,
+                    reflected_xs, reflected_ys,
+                    new_xs, new_ys,
+                    post_collision_xs, post_collision_ys,
+                    collision_pnt, center,
+                    ball_tangent_grad, path_tangent_grad)
+
+    return post_collision_xs, post_collision_ys
+
+
+def plotDebugGraphs(path: Poly,
+                    trans_xs, trans_ys,
+                    reflected_xs, reflected_ys,
+                    new_xs, new_ys,
+                    post_collision_xs, post_collision_ys,
+                    collision_point, center,
+                    ball_tangent_grad, path_tangent_grad):
+    figure, axes = plt.subplots()
+    axes.set_aspect(1)
+
+    # We need this in order to display the entire flight path of the ball
+    x_ = np.linspace(-5, 15, 50)
+    axes.plot(x_, path(x_))
+
+    axes.plot(trans_xs, trans_ys)
+
+    axes.plot(reflected_xs, reflected_ys)
+
+    axes.plot(new_xs, new_ys)
+
     axes.plot(post_collision_xs, post_collision_ys)
 
     # The line tangent to the ball at the point of colllision
+    x_r, y_r = collision_point
     c = y_r - ball_tangent_grad*x_r
     axes.plot([-1.0, 1.0], [-ball_tangent_grad + c, ball_tangent_grad + c])
 
     # A line that esitmates the path followed by the ball at the time of collision
+    x_center, y_center = center
     c = y_center - x_center*path_tangent_grad
     axes.plot([-2, 2], [-2*path_tangent_grad + c, 2*path_tangent_grad + c])
 
@@ -179,12 +202,11 @@ def ballCollisionWithEdgeModel(path: Poly, center, collision_pnt):
     c = y_r - x_r * (-1/ball_tangent_grad)
     axes.plot([-2, 2], [-2*(-1/ball_tangent_grad) + c, 2*(-1/ball_tangent_grad) + c])
 
+    # Show the position of the ball at the time of the collision
     circle = patches.Circle(center, R, fill=False)
     axes.add_artist(circle)
 
     plt.show()
-
-    return post_collision_xs, post_collision_ys
 
 
 def rotate(xs, ys, theta):
