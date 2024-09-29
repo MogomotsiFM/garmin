@@ -99,70 +99,101 @@ def findPositionOfBallCollidingWithRimEdge(poly: Poly, x_rim, y_rim):
     return correct_root[0], poly(correct_root[0])
 
 
-def ballCollisionWithEdgeModel(poly: Poly, center, collision_pnt):
+def ballCollisionWithEdgeModel(path: Poly, center, collision_pnt):
     '''
         Input:
-            poly: The polynomial that models the path followed by a ball,
+            path: The polynomial that models the path followed by a ball,
             center = (x_c, y_c): The center of the ball when the collision is predicted to happen
             collision_pnt = (x_r, y_r): The edge of the rim against which the ball is colliding
         Output:
-            The direction of the ball after the collision
+            A set of points that model the path followed by the ball after the collision
     '''
     x_center, y_center = center
     x_r, y_r = collision_pnt
     
     # Gradient at the point of collision
-    m = - (x_r - x_center) / (y_r - y_center + 0.000000001)
-    print("Gradient on a circle: ", m)
+    ball_tangent_grad = - (x_r - x_center) / (y_r - y_center + 0.000000001)
+    print("Gradient on a circle: ", ball_tangent_grad)
 
-    theta = np.atan(m)
-    print("Theta: ", theta)
+    theta = np.atan(ball_tangent_grad)
 
-    # Rotation matrix
-    rot = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
     # Translation: We rotate about the point of collision
     trans = np.array(center, ndmin=2)
     trans = trans.transpose()
 
     # Sample the path after the point of collision
     # This simulates tracking the ball past the collision point
-    xs = np.linspace(x_center, -5, 10)
-    ys = poly(xs)
+    xs = np.linspace(x_center, -5, 20)
+    ys = path(xs)
 
     figure, axes = plt.subplots()
     axes.set_aspect(1)
 
+    # We need this in order to display the entire flight path of the ball
     x_ = np.linspace(-5, 15, 50)
-    axes.plot(x_, poly(x_))
+    axes.plot(x_, path(x_))
 
-    print(rot)
-    print("YS: ", trans)
+    # Translate the points past the predicted collision point so that they can be rotated about the origin
+    xs = xs - trans[0]
+    ys = ys - trans[1]
 
-    coords = np.vstack([xs, ys]) - trans
-    print("Coords: ", coords)
-    split = np.hsplit(coords, xs.size)
-    print("HSplit: ", split)
-    transformed = rot@split #+ trans
-    trans_coords = np.hstack(transformed)
-    print("Rotated: ", trans_coords)
-
-    trans_xs, trans_ys = np.vsplit(trans_coords, 2)
-    trans_xs = trans_xs[0]
-    trans_ys = trans_ys[0]
+    # Rotate the points such that the tangent of the ball at the collision point is parallel to the y-axis
+    trans_xs, trans_ys = rotate(xs, ys, theta)
     axes.plot(trans_xs, trans_ys)
-    print("Trans")
-    print(trans_xs)
-    print(trans_ys)
 
+    # Reflect the path about the y-axis to model the ball bouncing off a wall
+    # This is really the what we wanted to get at!!
     trans_xs = np.abs(trans_xs)
     axes.plot(trans_xs, trans_ys)
 
-    reflected_coords = np.vstack([trans_xs, trans_ys])
+    # Undo the first rotation
+    new_xs, new_ys = rotate(trans_xs, trans_ys, -theta)
+
+    axes.plot(new_xs, new_ys)
+
+    # We need to tamper these with the direction of flight of the ball at time of collision
+    # Hence we compute the gradient of the path at that point
+    deriv = path.deriv()
+    path_tangent_grad = deriv(x_center)
+
+    gamma = computeAngleBetweenTwoLines(ball_tangent_grad, path_tangent_grad)
+    
+    # Actually adjust the flight path to take into account the direction of the ball
+    new_xs, new_ys = rotate(new_xs, new_ys, gamma)
+    
+    # Finally, undo the initial translation
+    new_xs = new_xs + trans[0]
+    new_ys = new_ys + trans[1]
+
+    axes.plot(new_xs, new_ys)
+
+    # The line tangent to the ball at the point of colllision
+    c = y_r - ball_tangent_grad*x_r
+    axes.plot([-1.0, 1.0], [-ball_tangent_grad + c, ball_tangent_grad + c])
+
+    # A line that esitmates the path followed by the ball at the time of collision
+    c = y_center - x_center*path_tangent_grad
+    axes.plot([-2, 2], [-2*path_tangent_grad + c, 2*path_tangent_grad + c])
+
+    # The line that is perpendicular to the tangent
+    c = y_r - x_r * (-1/ball_tangent_grad)
+    axes.plot([-2, 2], [-2*(-1/ball_tangent_grad) + c, 2*(-1/ball_tangent_grad) + c])
+
+    circle = patches.Circle(center, R, fill=False)
+    axes.add_artist(circle)
+
+    plt.show()
+
+    return new_xs, new_ys
+
+
+def rotate(xs, ys, theta):
+    reflected_coords = np.vstack([xs, ys])
     reflected_coords = np.hsplit(reflected_coords, xs.size)
     print("Reflected coords hsplit: ", reflected_coords)
 
-    reverse_rot = np.array([[np.cos(-theta), -np.sin(-theta)], [np.sin(-theta), np.cos(-theta)]])
-    coords_post_collision = reverse_rot@reflected_coords #+ trans
+    reverse_rot = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+    coords_post_collision = reverse_rot@reflected_coords 
     print("New coords post collision: ", coords_post_collision)
 
     new_coords = np.hstack(coords_post_collision)
@@ -170,17 +201,22 @@ def ballCollisionWithEdgeModel(poly: Poly, center, collision_pnt):
     print("Old coords: ", xs, ys)
 
     new_xs, new_ys = np.vsplit(new_coords, 2)
-    new_xs = new_xs[0]
-    new_ys = new_ys[0]
 
-    axes.plot(new_xs, new_ys)
+    return new_xs[0], new_ys[0]
 
-    # We need to tamper these with the direction of flight of the ball at time of collision
-    # Hence we compute the gradient of the path at that point
-    deriv = poly.deriv()
-    m2 = deriv(x_center)
 
-    alpha = np.atan(m2)
+def computeAngleBetweenTwoLines(ball_tangent_gradient, path_tangent_gradient):
+    '''
+        The direction of flight relative to a surface can change the direction of flight after
+        the collision. The surface in this case is a tangent to the ball at the point of collision.
+        The direction of flight is estimated using the tangent of the flight path at the time of 
+        collision.
+
+        This function computes the angle between these two tangents.
+    '''
+
+    alpha = np.atan(path_tangent_gradient)
+    theta = np.atan(ball_tangent_gradient)
 
     gamma = 0
 
@@ -190,7 +226,7 @@ def ballCollisionWithEdgeModel(poly: Poly, center, collision_pnt):
     print("Alpha: ", alpha*180/np.pi)
 
 
-    if m < 0:
+    if ball_tangent_gradient < 0:
         print("Theta: ", theta*180/np.pi)
         theta = np.pi + theta # Automatically the angle this line makes with the x-axis is less than zero
         print("Theta: ", theta*180/np.pi)
@@ -220,51 +256,9 @@ def ballCollisionWithEdgeModel(poly: Poly, center, collision_pnt):
             gamma = np.pi - 2*beta
     
     print("Gamma: ", gamma*180/np.pi)
-    adjusted_coords = np.vstack([new_xs, new_ys])
-    adjusted_coords = np.hsplit(adjusted_coords, xs.size)
-    print("Reflected coords hsplit: ", adjusted_coords)
 
-    adjust_rot = np.array([[np.cos(gamma), -np.sin(gamma)], [np.sin(gamma), np.cos(gamma)]])
-    coords_post_collision = adjust_rot@adjusted_coords + trans
-    print("New coords post collision: ", coords_post_collision)
+    return gamma
 
-    new_coords = np.hstack(coords_post_collision)
-    print("\nStacked: ", new_coords)
-    print("Old coords: ", xs, ys)
-
-    new_xs, new_ys = np.vsplit(new_coords, 2)
-    new_xs = new_xs[0]
-    new_ys = new_ys[0]
-
-    axes.plot(new_xs, new_ys)
-
-    # The line tangent to the ball at the point of colllision
-    c = y_r - m*x_r
-    axes.plot([-1.0, 1.0], [-m+c, m+c])
-
-    # A line that esitmates the path followed by the ball at the time of collision
-    c = y_center - x_center*m2
-    axes.plot([-2, 2], [-2*m2+c, 2*m2+c])
-
-    # The line that is perpendicular to the tangent
-    c = y_r - x_r * (-1/m)
-    axes.plot([-2, 2], [-2*(-1/m)+c, 2*(-1/m)+c])
-
-    circle = patches.Circle(center, R, fill=False)
-    axes.add_artist(circle)
-
-    plt.show()
-
-    # reflected_poly = poly.fit(new_vals[0], new_vals[1])
-
-    if m > 0 and x_r < 0:
-        return "Score."
-    elif m > 0 and x_r > 0:
-        return "Undershot."
-    elif x_r < 0:
-        return "Collision with the far edge of the rim still to be modelled."
-    else:
-        return "Collision with the near edge of the rim still to be modelled."
 
 
 # Distance between sensors in meters
