@@ -193,34 +193,37 @@ def plotDebugGraphs(path: Poly,
 
     # We need this in order to display the entire flight path of the ball
     x_ = np.linspace(-5, 15, 50)
-    axes.plot(x_, path(x_))
+    axes.plot(x_, path(x_), label="Estimated flight path")
 
-    axes.plot(trans_xs, trans_ys)
+    axes.plot(trans_xs, trans_ys, label="Translated and rotated")
 
-    axes.plot(reflected_xs, reflected_ys)
+    axes.plot(reflected_xs, reflected_ys, label="Reflection")
 
-    axes.plot(new_xs, new_ys)
+    axes.plot(new_xs, new_ys, label="Undo rotation")
 
-    axes.plot(post_collision_xs, post_collision_ys)
+    axes.plot(post_collision_xs, post_collision_ys, label="Post-collision path")
 
-    # The line tangent to the ball at the point of colllision
+    # The tangent of the ball at the point of colllision
     x_r, y_r = collision_point
     c = y_r - ball_tangent_grad*x_r
-    axes.plot([-1.0, 1.0], [-ball_tangent_grad + c, ball_tangent_grad + c])
+    axes.plot([-1.0, 1.0], [-ball_tangent_grad + c, ball_tangent_grad + c], label="Tanget of ball")
 
-    # A line that esitmates the path followed by the ball at the time of collision
+    # A line that estimates the path followed by the ball at the time of collision
     x_center, y_center = center
     c = y_center - x_center*path_tangent_grad
-    axes.plot([-2, 2], [-2*path_tangent_grad + c, 2*path_tangent_grad + c])
+    axes.plot([-2, 2], [-2*path_tangent_grad + c, 2*path_tangent_grad + c], label="Flight path tangent")
 
-    # The line that is perpendicular to the tangent
+    # The line that is perpendicular to the tangent of the ball
+    # It just makes it easier to see that the angle of incident is equal to the angle of 
     c = y_r - x_r * (-1/ball_tangent_grad)
-    axes.plot([-2, 2], [-2*(-1/ball_tangent_grad) + c, 2*(-1/ball_tangent_grad) + c])
+    axes.plot([-2, 2], [-2*(-1/ball_tangent_grad) + c, 2*(-1/ball_tangent_grad) + c], label="Perpendicular to ball tangent")
 
     # Show the position of the ball at the time of the collision
-    circle = patches.Circle(center, R, fill=False)
+    circle = patches.Circle(center, R, fill=False, label="Ball")
     axes.add_artist(circle)
 
+    axes.legend(shadow=True)
+    
     plt.show()
 
 
