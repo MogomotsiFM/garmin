@@ -126,9 +126,8 @@ def ballCollisionWithEdgeModel(path: Poly, center, collision_pnt):
     xs = np.linspace(x_center, -5, 20)
     ys = path(xs)
 
-    # Translate the points past the predicted collision point so that they can be rotated about the origin
-    xs = xs - trans[0]
-    ys = ys - trans[1]
+    # Translate the points past the predicted collision point so that they can be rotated about the axis
+    xs, ys = translate(xs, ys, -trans)
 
     # Rotate the points such that the tangent of the ball at the collision point is parallel to the y-axis
     trans_xs, trans_ys = rotate(xs, ys, theta)
@@ -146,14 +145,13 @@ def ballCollisionWithEdgeModel(path: Poly, center, collision_pnt):
     deriv = path.deriv()
     path_tangent_grad = deriv(x_center)
 
-    gamma = computeAngleBetweenTwoLines(ball_tangent_grad, path_tangent_grad)
-    
-    # Actually adjust the flight path to take into account the direction of the ball
-    post_collision_xs, post_collision_ys = rotate(new_xs, new_ys, gamma)
+    post_collision_xs, post_collision_ys = adjustPostCollisionPathWithFlightDirection(path_tangent_grad, 
+                                                                                      ball_tangent_grad, 
+                                                                                      new_xs, 
+                                                                                      new_ys)
     
     # Finally, undo the initial translation
-    post_collision_xs = post_collision_xs + trans[0]
-    post_collision_ys = post_collision_ys + trans[1]
+    post_collision_xs, post_collision_ys = translate(post_collision_xs, post_collision_ys, trans)
 
     plotDebugGraphs(path,
                     trans_xs, trans_ys,
@@ -164,6 +162,23 @@ def ballCollisionWithEdgeModel(path: Poly, center, collision_pnt):
                     ball_tangent_grad, path_tangent_grad)
 
     return post_collision_xs, post_collision_ys
+
+
+def translate(xs, ys, trans):
+    return xs + trans[0], ys + trans[1]
+
+
+def adjustPostCollisionPathWithFlightDirection(path_tangent_grad, ball_tangent_grad, xs, ys):
+    '''
+        The direction of flight relative to a surface can change the direction of flight after
+        the collision. The surface in this case is a tangent to the ball at the point of collision.
+        The direction of flight is estimated using the tangent of the flight path at the time of 
+        collision.
+    '''
+    gamma = computeAngleBetweenTwoLines(ball_tangent_grad, path_tangent_grad)
+    
+    # Actually adjust the flight path to take into account the direction of the ball
+    return rotate(xs, ys, gamma)
 
 
 def plotDebugGraphs(path: Poly,
@@ -229,12 +244,7 @@ def rotate(xs, ys, theta):
 
 def computeAngleBetweenTwoLines(ball_tangent_gradient, path_tangent_gradient):
     '''
-        The direction of flight relative to a surface can change the direction of flight after
-        the collision. The surface in this case is a tangent to the ball at the point of collision.
-        The direction of flight is estimated using the tangent of the flight path at the time of 
-        collision.
-
-        This function computes the angle between these two tangents.
+        This function computes the angle between these two straight lines.
     '''
 
     alpha = np.atan(path_tangent_gradient)
