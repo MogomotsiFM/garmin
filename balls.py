@@ -37,8 +37,19 @@ def predictOutcome(path):
     if path(RR) > (HR + R):
         # Ball passes above the rim
         if path(-RR) < (HR - R):
-            # This is a goal
-            outcome = "Score"
+            # Possibly a goal
+            # Can we find a collision when the
+            outcome, x_c, y_c = doesBallCollideWithRim(path)
+            if outcome == "score":
+                outcome = "Score"
+            elif outcome == "collision":
+                x, y = findPositionOfBallCollidingWithRimEdge(path, x_c, y_c)
+
+                xs, ys = predictFlightPathPostCollision(path, (x, y), (x_c, y_c))
+
+                outcome = predictOutcomePostCollision(xs, ys)
+            else: # outcome = "miss"
+                print("Check collision with board")
         elif path(-RR) < (HR + R):
             # Ball collides with the  last edge of the rim. We need to model this.
             # We may need to backtrack to identify the point of collision.
@@ -61,11 +72,10 @@ def predictOutcome(path):
             # Model the collision
             xs, ys = predictFlightPathPostCollision(path, (x, y), (-RR-DB, y))
 
-            #outcome = predictOutcomePostCollision(xs, ys)
+            outcome = predictOutcomePostCollision(xs, ys)
 
-            #print("               Outcome: ", outcome)
+            print("               Outcome: ", outcome)
 
-            outcome = "Collision with backbboard."
             return outcome, x, y
         else:
             # Overshot
@@ -91,6 +101,9 @@ def predictOutcomePostCollision(xs, ys):
         Anything beyond that it break down. To improve it we would have to keep track of the time in flight
         and then use it to estimate the velocity. This statement is to justify our assumption that 
         the path after the collision is monotonic.
+
+        Input:
+            (xs, ys): Path followed by the ball after the collision.
     '''
     path = Poly.fit(xs, ys, deg=2)
 
@@ -111,6 +124,49 @@ def predictOutcomePostCollision(xs, ys):
             return "Score."
         else:
             return "Ball bounced of the rim."
+
+def doesBallCollideWithRim(path: Poly):
+    # We want to the point of intersection of two equations
+    #       y = HR (The height of the rim)
+    #       y = path
+    obj = path - HR
+
+    roots = obj.roots()
+    real_roots = np.extract(np.isreal(roots), roots)
+
+    print("Collision with rim roots: ", roots)
+    print("Collision with rim real roots: ", real_roots)
+
+    if real_roots.size == 0:
+        return "miss", None, None
+
+    # Distance from the right edge of the rim to the center of the ball
+    d1 = np.abs(RR - real_roots)
+    # Distance from the left edge of the rim to the center of the ball
+    d2 = np.abs(-RR - real_roots)
+    condition = np.all([d1 >= R, d2 >= R], axis=0)
+    pnts = np.extract(condition , roots)
+    print("Any points that result in no collision: ", pnts)
+
+    if pnts.size:
+        return "score", None, None
+    else:
+        # Notice how we include points that are just outside the rim by extending the search window by the 
+        # radius of the ball R
+        condition = np.all([real_roots >= -RR, real_roots <= (RR + R)], axis=0)
+        collision_pnts = np.extract(condition , real_roots)
+        print("Collision points: ", collision_pnts)
+        if collision_pnts.size:
+            # We expect only one value
+            d1 = np.abs(RR - collision_pnts[0])
+            d2 = np.abs(-RR - collision_pnts[0])
+            if d1 <= d2: 
+                return "collision", RR, path(RR)
+            else:
+                return "collision", -RR, path(-RR)
+        else:
+            # This should not happen    
+            return "miss", None, None
 
 
 def findPositionOfBallCollidingWithRimEdge(path: Poly, x_rim, y_rim):
