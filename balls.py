@@ -33,37 +33,49 @@ def readDistances(data, header):
     return dist
 
 
-def predictOutcome(poly):
-    if poly(RR) > (HR + R):
+def predictOutcome(path):
+    if path(RR) > (HR + R):
         # Ball passes above the rim
-        if poly(-RR) < (HR - R):
+        if path(-RR) < (HR - R):
             # This is a goal
             outcome = "Score"
-        elif poly(-RR) < (HR + R):
+        elif path(-RR) < (HR + R):
             # Ball collides with the  last edge of the rim. We need to model this.
             # We may need to backtrack to identify the point of collision.
             outcome = "Collision with the last edge of the rim."
 
-            x, y = findPositionOfBallCollidingWithRimEdge(poly, -RR, HR)
+            x, y = findPositionOfBallCollidingWithRimEdge(path, -RR, HR)
 
             # Model the collision
-            xs, ys = predictFlightPathPostCollision(poly, (x, y), (-RR, HR))
+            xs, ys = predictFlightPathPostCollision(path, (x, y), (-RR, HR))
 
             outcome = predictOutcomePostCollision(xs, ys)
 
             return outcome, x, y
-        elif poly(-RR - DB) < (HR + HB):
+        elif path(-RR - DB) < (HR + HB):
             # Ball bounces of the backboard. We must model this.
+            x, y = findPositionOfBallCollidingWithBackboard(path)
+
+            print(x, y)
+
+            # Model the collision
+            xs, ys = predictFlightPathPostCollision(path, (x, y), (-RR-DB, y))
+
+            #outcome = predictOutcomePostCollision(xs, ys)
+
+            #print("               Outcome: ", outcome)
+
             outcome = "Collision with backbboard."
+            return outcome, x, y
         else:
             # Overshot
             outcome = "Overshot."
-    elif poly(RR) > (HR - R):
-        # Ball collides with the rim
-        # We model the collision
+    elif path(RR) > (HR - R):
+        # Ball collides with the first edge of the rim.
+        # We model the collision.
         outcome = "Collision with the first edge of the rim. Need to model this."
 
-        x, y = findPositionOfBallCollidingWithRimEdge(poly, RR, HR)
+        x, y = findPositionOfBallCollidingWithRimEdge(path, RR, HR)
         
         return outcome, x, y
     else:
@@ -101,7 +113,7 @@ def predictOutcomePostCollision(xs, ys):
             return "Ball bounced of the rim."
 
 
-def findPositionOfBallCollidingWithRimEdge(poly: Poly, x_rim, y_rim):
+def findPositionOfBallCollidingWithRimEdge(path: Poly, x_rim, y_rim):
     '''
         Input:
             poly: The polynomial that models the path followed by a ball
@@ -112,21 +124,49 @@ def findPositionOfBallCollidingWithRimEdge(poly: Poly, x_rim, y_rim):
     #   Construct the equation of a circle using the Polynomial package
     #       (x - x_c)**2 + (y - y_c)**2 = R*R
     #       where x = x_rim , y = y_rim and R is the radius of the ball
-    #       x_c is unknown and y_c = poly 
+    #       x_c is unknown and y_c = path 
 
-    p1 = Poly([x_rim, -1], domain=poly.domain, window=poly.window)
+    p1 = Poly([x_rim, -1], domain=path.domain, window=path.window)
     p1 = p1 * p1
     
-    p2 = poly - y_rim
+    p2 = path - y_rim
     p2 = p2 * p2
     
     p = p1 + p2 - R*R
     
     roots = p.roots()
     real_roots = np.extract(np.logical_not(np.iscomplex(roots)), roots)
+
+    # TODO: The condition loos off. It might work one edge and not the other
     correct_root = np.extract(np.real(real_roots) >= x_rim, real_roots.real)
     
-    return correct_root[0], poly(correct_root[0])
+    return correct_root[0], path(correct_root[0])
+
+
+def findPositionOfBallCollidingWithBackboard(path: Poly):
+    '''
+        Find the point of contact of a circle and a straight line (x=x0)
+        Also, we know that the y value of the center of the ball is modelled by the given polynomial (path)
+
+        Input: 
+            path: The polynomial that models the path of the center of the ball
+
+        Output:
+            The position of the ball when it first makes contact with the backboard
+    '''
+    # Because the straight line is the y-axis, the equation of the circle is slightly simpler:
+    #   (x0 - x_c)**2 + (y - y_c) = R*R
+    # (x_c, y_c) is the center of the ball (circle),
+    # y_c = path,
+    # R is the radius of the circle,
+    # y = y_c (By definition of a tangent to a circle)
+    # Therefore:
+    x0 = -RR - DB
+    x_c = x0 + R
+    if x_c < x0:
+        x_c = x0 - R
+    #print("          Path: ", path)
+    return x_c, path(x_c)
 
 
 def predictFlightPathPostCollision(path: Poly, center, collision_pnt):
@@ -142,10 +182,16 @@ def predictFlightPathPostCollision(path: Poly, center, collision_pnt):
     x_r, y_r = collision_pnt
     
     # Gradient at the point of collision
-    ball_tangent_grad = - (x_r - x_center) / (y_r - y_center + 0.000000001)
+    ball_tangent_grad = - (x_r - x_center) / (y_r - y_center)
     print("Gradient on a circle: ", ball_tangent_grad)
 
     theta = np.atan(ball_tangent_grad)
+    rotation_angle = np.pi/2 - np.abs(theta)
+    if theta < 0:
+        rotation_angle = -1*rotation_angle
+
+    print("                Theta: ", theta*180/np.pi)
+    print("                Rotation angle: ", rotation_angle*180/np.pi)
 
     # Translation: We rotate about the point of collision
     trans = np.array(center, ndmin=2)
@@ -160,28 +206,18 @@ def predictFlightPathPostCollision(path: Poly, center, collision_pnt):
     xs, ys = translate(xs, ys, -trans)
 
     # Rotate the points such that the tangent of the ball at the collision point is parallel to the y-axis
-    trans_xs, trans_ys = rotate(xs, ys, theta)
-
+    trans_xs, trans_ys = rotate(xs, ys, rotation_angle)        
+    
     # Reflect the path about the y-axis to model the ball bouncing off a wall
     # This is really the what we wanted to get at!!
     reflected_xs = np.abs(trans_xs)
     reflected_ys = trans_ys
 
     # Undo the first rotation
-    new_xs, new_ys = rotate(reflected_xs, reflected_ys, -theta)
+    new_xs, new_ys = rotate(reflected_xs, reflected_ys, -rotation_angle)
 
-    # We need to tamper these with the direction of flight of the ball at time of collision
-    # Hence we compute the gradient of the path at that point
-    deriv = path.deriv()
-    path_tangent_grad = deriv(x_center)
-
-    post_collision_xs, post_collision_ys = adjustPostCollisionPathWithFlightDirection(path_tangent_grad, 
-                                                                                      ball_tangent_grad, 
-                                                                                      new_xs, 
-                                                                                      new_ys)
-    
     # Finally, undo the initial translation
-    post_collision_xs, post_collision_ys = translate(post_collision_xs, post_collision_ys, trans)
+    post_collision_xs, post_collision_ys = translate(new_xs, new_ys, trans)
 
     plotDebugGraphs(path,
                     trans_xs, trans_ys,
@@ -189,7 +225,7 @@ def predictFlightPathPostCollision(path: Poly, center, collision_pnt):
                     new_xs, new_ys,
                     post_collision_xs, post_collision_ys,
                     collision_pnt, center,
-                    ball_tangent_grad, path_tangent_grad)
+                    ball_tangent_grad)
 
     return post_collision_xs, post_collision_ys
 
@@ -198,26 +234,13 @@ def translate(xs, ys, trans):
     return xs + trans[0], ys + trans[1]
 
 
-def adjustPostCollisionPathWithFlightDirection(path_tangent_grad, ball_tangent_grad, xs, ys):
-    '''
-        The direction of flight relative to a surface can change the direction of flight after
-        the collision. The surface in this case is a tangent to the ball at the point of collision.
-        The direction of flight is estimated using the tangent of the flight path at the time of 
-        collision.
-    '''
-    gamma = computeAngleBetweenTwoLines(ball_tangent_grad, path_tangent_grad)
-    
-    # Actually adjust the flight path to take into account the direction of the ball
-    return rotate(xs, ys, gamma)
-
-
 def plotDebugGraphs(path: Poly,
                     trans_xs, trans_ys,
                     reflected_xs, reflected_ys,
                     new_xs, new_ys,
                     post_collision_xs, post_collision_ys,
                     collision_point, center,
-                    ball_tangent_grad, path_tangent_grad):
+                    ball_tangent_grad):
     figure, axes = plt.subplots()
     axes.set_aspect(1)
 
@@ -225,21 +248,29 @@ def plotDebugGraphs(path: Poly,
     x_ = np.linspace(-5, 15, 50)
     axes.plot(x_, path(x_), label="Estimated flight path")
 
-    axes.plot(trans_xs, trans_ys, label="Translated and rotated")
+    axes.plot(trans_xs, trans_ys, '+', label="Translated and rotated")
 
     axes.plot(reflected_xs, reflected_ys, label="Reflection")
 
-    axes.plot(new_xs, new_ys, label="Undo rotation")
+    axes.plot(new_xs, new_ys, 'o', label="Undo rotation")
 
     axes.plot(post_collision_xs, post_collision_ys, label="Post-collision path")
 
     # The tangent of the ball at the point of colllision
     x_r, y_r = collision_point
-    c = y_r - ball_tangent_grad*x_r
-    axes.plot([-1.0, 1.0], [-ball_tangent_grad + c, ball_tangent_grad + c], label="Tanget of ball")
+    print("                            Ball tangent grad: ", ball_tangent_grad)
+    if np.isfinite(ball_tangent_grad):
+        c = y_r - ball_tangent_grad*x_r
+        axes.plot([-1.0, 1.0], [-ball_tangent_grad + c, ball_tangent_grad + c], label="Tanget of ball")
+    else:
+        axes.plot([-RR-DB, -RR-DB], [3.05, 4.2], label="Tanget of ball")
 
     # A line that estimates the path followed by the ball at the time of collision
     x_center, y_center = center
+    
+    deriv = path.deriv()
+    path_tangent_grad = deriv(x_center)
+    
     c = y_center - x_center*path_tangent_grad
     axes.plot([-2, 2], [-2*path_tangent_grad + c, 2*path_tangent_grad + c], label="Flight path tangent")
 
@@ -260,69 +291,19 @@ def plotDebugGraphs(path: Poly,
 def rotate(xs, ys, theta):
     reflected_coords = np.vstack([xs, ys])
     reflected_coords = np.hsplit(reflected_coords, xs.size)
-    print("Reflected coords hsplit: ", reflected_coords)
+    #print("Reflected coords hsplit: ", reflected_coords)
 
     reverse_rot = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
     coords_post_collision = reverse_rot@reflected_coords 
-    print("New coords post collision: ", coords_post_collision)
+    #print("New coords post collision: ", coords_post_collision)
 
     new_coords = np.hstack(coords_post_collision)
-    print("\nStacked: ", new_coords)
-    print("Old coords: ", xs, ys)
+    #print("\nStacked: ", new_coords)
+    #print("Old coords: ", xs, ys)
 
     new_xs, new_ys = np.vsplit(new_coords, 2)
 
     return new_xs[0], new_ys[0]
-
-
-def computeAngleBetweenTwoLines(ball_tangent_gradient, path_tangent_gradient):
-    '''
-        This function computes the angle between these two straight lines.
-    '''
-
-    alpha = np.atan(path_tangent_gradient)
-    theta = np.atan(ball_tangent_gradient)
-
-    gamma = 0
-
-    print("Alpha: ", alpha*180/np.pi)
-    if alpha < 0:
-        alpha = np.pi + alpha
-    print("Alpha: ", alpha*180/np.pi)
-
-
-    if ball_tangent_gradient < 0:
-        print("Theta: ", theta*180/np.pi)
-        theta = np.pi + theta # Automatically the angle this line makes with the x-axis is less than zero
-        print("Theta: ", theta*180/np.pi)
-
-        # Angle between the two lines
-        beta = theta - alpha
-        print("Beta: ", beta*180/np.pi)
-
-        if beta >= np.pi:
-            tmp = np.pi - beta
-
-            gamma = np.pi - 2 * tmp
-        else: # beta < np.pi
-            # The negative sign indicates that we rotate clockwise
-            gamma = -(np.pi - 2*beta) 
-
-    else: # m >= 0 
-        # We expect alpha to be greater than zero
-        beta = theta - alpha
-
-        if beta >= 0:
-            # The negative sign indicates that we rotate clockwise
-            gamma = -(np.pi - 2*beta)
-        else: # beta < 0
-            beta = -beta
-
-            gamma = np.pi - 2*beta
-    
-    print("Gamma: ", gamma*180/np.pi)
-
-    return gamma
 
 
 
