@@ -34,63 +34,34 @@ def readDistances(data, header):
 
 
 def predictOutcome(path):
-    if path(RR) > (HR + R):
-        # Ball passes above the rim
-        if path(-RR) < (HR - R):
-            # Possibly a goal
-            # Can we find a collision when the
-            outcome, x_collision, y_collision = doesBallCollideWithRim(path)
-            if outcome == "score":
-                outcome = "Score"
-            elif outcome == "collision":
-                print("Collision: ", x_collision, y_collision)
-                x_center, y_center = findPositionOfBallCollidingWithRimEdge(path, x_collision, y_collision)
+    '''
+        Output:
+            outcome: "Score" | "Undershot" | "Flies off the rim" | "Flies off the backboard" | "Overshot"
+            x_center: x coordinate of the center of the ball if there is a collision
+            y_center: y coordinate of the center of the ball if there is a collision
+            post_collision_path: The flight path of the ball after a collision.
+    '''
+    if path(RR) < (HR - R):
+        return "Undershot", None, None, None
+    
+    outcome, x_collision, y_collision = doesBallCollideWithRim(path)
+    collision_pnt = (x_collision, y_collision)
 
-                xs, ys = predictFlightPathPostCollision(path, (x_center, y_center), (x_collision, y_collision))
+    if outcome == "score":
+        return "Score", None, None, None
+    elif outcome == "miss":
+        outcome, x_center, y_center = findPositionOfBallCollidingWithBackboard(path)
+        collision_pnt = (-RR-DB, y_center)
+        if outcome == "overshot":
+            return "Overshot", None, None, None
+    else: # outcome == "collision"
+       x_center, y_center = findPositionOfBallCollidingWithRimEdge(path, x_collision, y_collision) 
 
-                outcome = predictOutcomePostCollision(xs, ys)
-            else: # outcome = "miss"
-                print("Check collision with board")
-        elif path(-RR) < (HR + R):
-            # Ball collides with the  last edge of the rim. We need to model this.
-            # We may need to backtrack to identify the point of collision.
-            outcome = "Collision with the last edge of the rim."
+    xs, ys = predictFlightPathPostCollision(path, (x_center, y_center), collision_pnt)
 
-            x_center, y_center = findPositionOfBallCollidingWithRimEdge(path, -RR, HR)
+    outcome = predictOutcomePostCollision(xs, ys)
 
-            # Model the collision
-            xs, ys = predictFlightPathPostCollision(path, (x_center, y_center), (-RR, HR))
-
-            outcome = predictOutcomePostCollision(xs, ys)
-
-            return outcome, x_center, y_center
-        elif path(-RR - DB) < (HR + HB):
-            tmp, x_center, y_center = findPositionOfBallCollidingWithBackboard(path)
-
-            # Model the collision
-            xs, ys = predictFlightPathPostCollision(path, (x_center, y_center), (-RR-DB, y_center))
-
-            outcome = predictOutcomePostCollision(xs, ys)
-
-            print("               Outcome: ", outcome)
-
-            return outcome, x_center, y_center
-        else:
-            # Overshot
-            outcome = "Overshot."
-    elif path(RR) > (HR - R):
-        # Ball collides with the first edge of the rim.
-        # We model the collision.
-        outcome = "Collision with the first edge of the rim. Need to model this."
-
-        x, y = findPositionOfBallCollidingWithRimEdge(path, RR, HR)
-        
-        return outcome, x, y
-    else:
-        # Undershot
-        outcome = "Undershot"
-
-    return outcome, None, None
+    return outcome, x_center, y_center, (xs, ys)
 
 
 def predictOutcomePostCollision(xs, ys):
@@ -216,7 +187,9 @@ def findPositionOfBallCollidingWithBackboard(path: Poly):
             path: The polynomial that models the path of the center of the ball
 
         Output:
-            The position of the ball when it first makes contact with the backboard
+            outcome: "overshot" | "collision"
+            x_c: The x coordinate of the ball when it first makes contact with the backboard
+            y_c: The y coordinate of the ball when it first makes contact with the backboard
     '''
     # Because the straight line is the y-axis, the equation of the circle is slightly simpler:
     #   (x0 - x_c)**2 + (y - y_c) = R*R
@@ -459,7 +432,7 @@ for i in range(1, 7):
 
     # If x_c and y_c exist then they represent the center of the ball that 
     # collides with either the ring or backboarc
-    outcome, x_c, y_c = predictOutcome(poly)
+    outcome, x_c, y_c, post_collision_path = predictOutcome(poly)
     print("Assessment: ", outcome)
 
     xs = np.linspace(-1, 10, 100)
