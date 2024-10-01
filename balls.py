@@ -42,57 +42,73 @@ def predictOutcome(path):
             post_collision_path: The flight path of the ball after a collision.
     '''
     if path(RR) < (HR - R):
-        return "Undershot", None, None, None
+        return "undershot", None, None, None
     
     outcome, x_collision, y_collision = doesBallCollideWithRim(path)
     collision_pnt = (x_collision, y_collision)
 
     if outcome == "score":
-        return "Score", None, None, None
+        return "score", None, None, None
     elif outcome == "miss":
         outcome, x_center, y_center = findPositionOfBallCollidingWithBackboard(path)
         collision_pnt = (-RR-DB, y_center)
         if outcome == "overshot":
-            return "Overshot", None, None, None
+            return "overshot", None, None, None
+        else: # outcome == "collision"
+            obstraction = "backboard"
     else: # outcome == "collision"
-       x_center, y_center = findPositionOfBallCollidingWithRimEdge(path, x_collision, y_collision) 
+        x_center, y_center = findPositionOfBallCollidingWithRimEdge(path, x_collision, y_collision)
+        if np.abs(x_collision - RR) < 0.0001:
+            obstraction = "r_rim" # Ball collides with the right edge of the rim
+        else:
+           obstraction = "l_rim" # Ball collides with the left edge of the rim
 
     xs, ys = predictFlightPathPostCollision(path, (x_center, y_center), collision_pnt)
 
-    outcome = predictOutcomePostCollision(xs, ys)
+    outcome = predictOutcomePostCollision(xs, ys, obstraction)
 
     return outcome, x_center, y_center, (xs, ys)
 
 
-def predictOutcomePostCollision(xs, ys):
+def predictOutcomePostCollision(xs, ys, obstraction):
     '''
-        Our model for the behaviour of the ball post-collision is fairly good in the first few centi-meters.
-        Anything beyond that it break down. To improve it we would have to keep track of the time in flight
-        and then use it to estimate the velocity. This statement is to justify our assumption that 
-        the path after the collision is monotonic.
-
         Input:
             (xs, ys): Path followed by the ball after the collision.
+            obstraction = "backboard" | "l_rim" | "r_rim"
     '''
     path = Poly.fit(xs, ys, deg=2)
 
     # Compute the gradient at the center of the rim
     deriv = path.deriv()
-    grad = deriv(0)
+    grad = deriv(0) 
 
     if grad > 0:
-        return "Ball bounced of the rim."
+        # We could recursively call predictOutcome if the ball bounces of the ring to determine whether it will
+        # collide with the backboard. But somewhere in the code we assumed that the ball always flies from 
+        # positive Infinity to negative Infinity.
+        # For this to work, we would have to represent the flight path using parametric functions :-(
+
+        return f"Ball bounced of the {obstraction}."
     
     else:
-        left_y = path(RR)
-        right_y = path(-RR)
+        right_y = path(RR)
+        left_y = path(-RR)
 
         # Because the post collision path is monotonic it is enough to check at the edges if the center of the 
         # ball is less than the height of the rim.
         if left_y <= HR or right_y <= HR:
-            return "Score."
+            if obstraction == "backboard":
+                outcome, _, _ = doesBallCollideWithRim(path)
+
+                if outcome == "collision":
+                    return "Collision with backboard then rim."
+                else:
+                    return outcome
+            else:
+                #TODO: There is a bug in this function.
+                return "score. score"
         else:
-            return "Ball bounced of the rim."
+            return f"Ball bounced of the {obstraction}."
 
 
 def doesBallCollideWithRim(path: Poly):
@@ -375,6 +391,7 @@ def rotate(xs, ys, theta):
     return new_xs[0], new_ys[0]
 
 
+
 debug = True
 
 # Distance between sensors in meters
@@ -422,6 +439,7 @@ for i in range(1, 7):
     figure, axes = plt.subplots()
     axes.set_aspect(1)
     axes.legend(shadow=True)
+    axes.set_title(outcome)
 
     axes.plot(xs, poly(xs), label="Estimate flight path")
     axes.plot(x, y, label="Measure fligh path")
