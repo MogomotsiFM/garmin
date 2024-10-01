@@ -94,6 +94,7 @@ def predictOutcomePostCollision(xs, ys):
         else:
             return "Ball bounced of the rim."
 
+
 def doesBallCollideWithRim(path: Poly):
     '''
         We want to the point of intersection of two equations
@@ -109,9 +110,6 @@ def doesBallCollideWithRim(path: Poly):
     roots = obj.roots()
     real_roots = np.extract(np.isreal(roots), roots)
 
-    print("Collision with rim roots: ", roots)
-    print("Collision with rim real roots: ", real_roots)
-
     if real_roots.size == 0:
         return "miss", None, None
 
@@ -121,7 +119,6 @@ def doesBallCollideWithRim(path: Poly):
     d2 = (real_roots >= (-RR + R))
     condition = np.all([d1, d2], axis=0)
     pnts = np.extract(condition , roots)
-    print("Any points that result in no collision: ", pnts, path(pnts))
 
     if pnts.size:
         return "score", None, None
@@ -130,7 +127,6 @@ def doesBallCollideWithRim(path: Poly):
         # radius of the ball R
         condition = np.all([real_roots >= -RR, real_roots <= (RR + R)], axis=0)
         collision_pnts = np.extract(condition , real_roots)
-        print("Collision points: ", collision_pnts)
         if collision_pnts.size:
             # We expect only one value
             if collision_pnts[0] >= 0: 
@@ -166,14 +162,11 @@ def findPositionOfBallCollidingWithRimEdge(path: Poly, x_rim, y_rim):
     roots = p.roots()
     real_roots = np.extract(np.logical_not(np.iscomplex(roots)), roots)
 
-    print("Roots: ", roots)
-    print("Real roots: ", real_roots)
     y_c = path( np.real(real_roots))
     if y_c.size == 1:
         return np.real(real_roots[0]), y_c[0]
     else:
         root = np.max(real_roots)
-        print("Root: ", np.real(root))
         root = np.real(root)
         return root, path(root)
 
@@ -202,7 +195,6 @@ def findPositionOfBallCollidingWithBackboard(path: Poly):
     x_c = x0 + R
     if x_c < x0:
         x_c = x0 - R
-    #print("          Path: ", path)
     y_c = path(x_c)
 
     if y_c > (HR + HB):
@@ -225,7 +217,6 @@ def predictFlightPathPostCollision(path: Poly, center, collision_pnt):
     
     # Gradient at the point of collision
     ball_tangent_grad = - (x_r - x_center) / (y_r - y_center)
-    print("Gradient on a circle: ", ball_tangent_grad)
 
     # Explanation?
     nx_circle, ny_circle = normal(ball_tangent_grad, collision_pnt[0], collision_pnt[1])
@@ -234,7 +225,6 @@ def predictFlightPathPostCollision(path: Poly, center, collision_pnt):
     nx_path, ny_path = vector(path_tangent_grad, center[0], center[1])
 
     dot = np.dot([nx_circle, ny_circle], [nx_path, ny_path])
-    print("Dot: ", dot)
 
     theta = np.atan(ball_tangent_grad)
     if dot < 0:
@@ -242,11 +232,7 @@ def predictFlightPathPostCollision(path: Poly, center, collision_pnt):
         if theta < 0:
             rotation_angle = -1*rotation_angle
     else:
-        print("Special case")
         rotation_angle = -theta
-
-    print("                Theta: ", theta*180/np.pi)
-    print("                Rotation angle: ", rotation_angle*180/np.pi)
 
     # Translation: We rotate about the point of collision
     trans = np.array(center, ndmin=2)
@@ -345,7 +331,6 @@ def plotDebugGraphs(path: Poly,
 
     # The tangent of the ball at the point of colllision
     x_r, y_r = collision_point
-    print("                            Ball tangent grad: ", ball_tangent_grad)
     if np.isfinite(ball_tangent_grad):
         c = y_r - ball_tangent_grad*x_r
         axes.plot([-1.0, 1.0], [-ball_tangent_grad + c, ball_tangent_grad + c], label="Tanget of ball (Wall)")
@@ -379,22 +364,18 @@ def plotDebugGraphs(path: Poly,
 def rotate(xs, ys, theta):
     reflected_coords = np.vstack([xs, ys])
     reflected_coords = np.hsplit(reflected_coords, xs.size)
-    #print("Reflected coords hsplit: ", reflected_coords)
 
     reverse_rot = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
     coords_post_collision = reverse_rot@reflected_coords 
-    #print("New coords post collision: ", coords_post_collision)
 
     new_coords = np.hstack(coords_post_collision)
-    #print("\nStacked: ", new_coords)
-    #print("Old coords: ", xs, ys)
 
     new_xs, new_ys = np.vsplit(new_coords, 2)
 
     return new_xs[0], new_ys[0]
 
 
-
+debug = True
 
 # Distance between sensors in meters
 L = 12.4
@@ -414,7 +395,6 @@ HB = 1.1
 # Distance of the backboard from the rim in meters
 DB = 0.1016
 
-
 df = pd.read_csv("basketball.csv", sep=', ', engine="python")
 
 for i in range(1, 7):
@@ -431,31 +411,41 @@ for i in range(1, 7):
     poly = Poly.fit(x, y, deg=2, domain=[-15, start], window=[-15, start])
 
     # If x_c and y_c exist then they represent the center of the ball that 
-    # collides with either the ring or backboarc
+    # collides with either the ring or backboard
     outcome, x_c, y_c, post_collision_path = predictOutcome(poly)
-    print("Assessment: ", outcome)
 
-    xs = np.linspace(-1, 10, 100)
+    xs = np.linspace(-1, y[0], 50)
+    # However, if there is a collision, then
+    if x_c is not None:
+        xs = np.linspace(x_c, y[0], 50)
 
     figure, axes = plt.subplots()
     axes.set_aspect(1)
+    axes.legend(shadow=True)
 
-    axes.plot(xs, poly(xs))
-    axes.plot(x, y)
+    axes.plot(xs, poly(xs), label="Estimate flight path")
+    axes.plot(x, y, label="Measure fligh path")
     # Plot a line that represents the rim
-    axes.plot([-RR, RR], [3.05, 3.05])
+    axes.plot([-RR, RR], [3.05, 3.05], label="Rim")
 
-    circle_l = plt.Circle( (RR, poly(RR)), R, fill=False)
-    axes.add_artist(circle_l)
+    # Plot the line that represents the backboard
+    axes.plot([-RR-DB, -RR-DB], [HR, HR+HB], label="Backboard")
 
-    circle_2 = plt.Circle( (-RR, poly(-RR)), R, fill=False)
-    axes.add_artist(circle_2)
+    if debug:
+        circle_l = plt.Circle( (RR, poly(RR)), R, fill=False, label="Ball(First rim edge)", color="green")
+        axes.add_artist(circle_l)
+
+        circle_2 = plt.Circle( (-RR, poly(-RR)), R, fill=False, label="Second rim edge", color="blue")
+        axes.add_artist(circle_2)
 
     if x_c is not None:
-        print("Drawing a circle.")
-        circle = plt.Circle((x_c, y_c), R, fill=False)
+        circle = plt.Circle((x_c, y_c), R, fill=False, label="Ball at collision point", color="red")
+        axes.add_artist(circle)
 
-        axes.add_artist( circle )
-
+        xs, ys = post_collision_path
+        condition = xs >= -1
+        xs = xs[condition]
+        ys = ys[condition]
+        axes.plot(xs, ys, label="Post collision path")
     plt.show()
 
