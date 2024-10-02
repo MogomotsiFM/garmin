@@ -50,8 +50,9 @@ def predictOutcome(x_path: Poly, y_path: Poly, t_path: Poly, start_time):
             y_center: y coordinate of the center of the ball if there is a collision
             post_collision_path: The flight path of the ball after a collision.
     '''
+    t = t_path(RR)
     y = evaluate(y_path, t_path, RR)
-    if y < (HR - R):
+    if y < (HR - R) and t > start_time:
         return "undershot", None, None
     
     outcome, x_collision, y_collision, t_collision = doesBallCollideWithRim(x_path, y_path, t_path, start_time)
@@ -64,16 +65,16 @@ def predictOutcome(x_path: Poly, y_path: Poly, t_path: Poly, start_time):
             return "overshot", None, None
         elif outcome == "collision":
             collision_pnt = (-RR-DB, y_center, t_collision)
-            obstraction = "backboard"
+            #obstraction = "backboard"
         else: # outcome = "miss"
             return "miss", None, None
     else: # outcome == "collision"
         x_center, y_center, t_collision = findPositionOfBallCollidingWithRimEdge(x_path, y_path, t_path, x_collision, y_collision, start_time)
         collision_pnt = (x_collision, y_collision, t_collision)
-        if np.abs(x_collision - RR) < 0.0001:
-            obstraction = "r_rim" # Ball collides with the right edge of the rim
-        else:
-           obstraction = "l_rim" # Ball collides with the left edge of the rim
+        #if np.abs(x_collision - RR) < 0.00001:
+        #    obstraction = "r_rim" # Ball collides with the right edge of the rim
+        #else:
+        #   obstraction = "l_rim" # Ball collides with the left edge of the rim
 
     xs, ys, ts = predictFlightPathPostCollision(x_path, y_path, t_path, (x_center, y_center), collision_pnt)
 
@@ -256,6 +257,8 @@ def predictFlightPathPostCollision(x_path: Poly, y_path: Poly, t_path: Poly, cen
     # Compute the normal of the collision surface
     nx_circle, ny_circle = normal(y_path, t_path, ball_tangent_grad, x_r, y_r)
     deriv = y_path.deriv()
+    deriv.window =  y_path.window
+    deriv.domain =  y_path.domain
     path_tangent_grad = evaluate(deriv, t_path, x_center)
     nx_path, ny_path = vector(x_path, y_path, path_tangent_grad, x_center, y_center, t_collision)
 
@@ -276,7 +279,7 @@ def predictFlightPathPostCollision(x_path: Poly, y_path: Poly, t_path: Poly, cen
     # Sample the path after the point of collision
     # This simulates tracking the ball past the collision point
     # The end time of our simulation is not easy to estimate because we do not even know the unit of time!
-    ts = np.linspace(t_collision, 2*t_collision, 100)
+    ts = np.linspace(t_collision, 5*t_collision, num=400)
     xs = x_path(ts)
     ys = y_path(ts)
 
@@ -301,8 +304,8 @@ def predictFlightPathPostCollision(x_path: Poly, y_path: Poly, t_path: Poly, cen
     # Finally, undo the initial translation
     post_collision_xs, post_collision_ys = translate(new_xs, new_ys, trans)
 
-    plotDebugGraphs(y_path,
-                    x_path,
+    plotDebugGraphs(x_path,
+                    y_path,
                     t_path,
                     ts,
                     trans_xs, trans_ys,
@@ -373,16 +376,16 @@ def plotDebugGraphs(x_path: Poly,
     axes.set_aspect(1)
 
     # We need this in order to display the entire flight path of the ball
-    t_ = np.linspace(0, np.max(ts), 100)
-    axes.plot(x_path(t_), y_path(t_), label="Estimated flight path")
+    #t_ = np.linspace(0, np.max(ts), num=100)
+    axes.plot(x_path(ts), y_path(ts), label="1. Estimated flight path")
 
-    axes.plot(trans_xs, trans_ys, '+', label="Translated and rotated")
+    axes.plot(trans_xs, trans_ys, '+', label="2. Translated and rotated")
 
-    axes.plot(reflected_xs, reflected_ys, label="Reflection")
+    axes.plot(reflected_xs, reflected_ys, label="3. Reflection")
 
-    axes.plot(new_xs, new_ys, 'o', label="Undo rotation")
+    axes.plot(new_xs, new_ys, 'o', label="4. Undo rotation")
 
-    axes.plot(post_collision_xs, post_collision_ys, label="Post-collision path")
+    axes.plot(post_collision_xs, post_collision_ys, label="5. Post-collision path")
 
     # The tangent of the ball at the point of colllision
     x_r, y_r, _ = collision_point
@@ -396,6 +399,8 @@ def plotDebugGraphs(x_path: Poly,
     x_center, y_center = center
     
     deriv = y_path.deriv()
+    deriv.window = y_path.window
+    deriv.domain = y_path.domain
     path_tangent_grad = evaluate(deriv, t_path, x_center)
     
     c = y_center - x_center*path_tangent_grad
@@ -412,6 +417,7 @@ def plotDebugGraphs(x_path: Poly,
     axes.add_artist(circle)
 
     axes.legend(shadow=True)
+    axes.set_title("Generating post-collision path")
     
     plt.show()
 
@@ -454,7 +460,6 @@ DB = 0.1016
 df = pd.read_csv("basketball.csv", sep=', ', engine="python")
 
 for i in range(1, 7):
-    print("\n\nBall ", i)
     s1_label = f"b{i}_s1"
     dist1 = readDistances(df, s1_label)
 
@@ -464,7 +469,7 @@ for i in range(1, 7):
     x, y = transformToCartesianCoordinates(dist1, dist2)
 
     # We need parametric models of the flight path
-    t = np.linspace(0, x.size, x.size)
+    t = np.linspace(0, x.size/2, num=x.size)
 
     # (Least squares) Fit the data to a second order polynomial
     start = x[0] + 1
@@ -474,21 +479,26 @@ for i in range(1, 7):
     # in (x, y) coordinate frame. We want this intermidiate representation to make it easy to 
     # link the two spaces. 
     # That is, if we have x then what is the corresponding value of y?
-    t_poly = Poly.fit(x, t, deg=1,  domain=[-15, 5*start], window=[-15, 5*start])
-    #t_poly = linear()
-    y_poly = Poly.fit(t, y, deg=2, domain=[0, 10000], window=[0, 10000])
+    
+    t_poly = Poly.fit(x, t, deg=1, domain=[-10*start, 10*start], window=[-10*start, 10*start])
+    #y_poly = Poly.fit(t, y, deg=2, domain=[0, 10000], window=[0, 10000])
+    y_ = Poly.fit(x, y, deg=2, domain=[-10*start, 10*start], window=[-10*start, 10*start])
+    y_poly = y_(x_poly)
+
     # If x_c and y_c exist then they represent the center of the ball that 
     # collides with either the ring or backboard
     outcome, collision_pnts, post_collision_path = predictOutcome(x_poly, y_poly, t_poly, start_time=0)
+    print("\n\nBall: ", i)
+    print("               ", outcome)
 
     if post_collision_path:
         xs, ys, ts = post_collision_path
 
-    xs = np.linspace(-1, x[0], 50)
+    xs = np.linspace(-1, x[0], num=50)
     # However, if there is a collision, then se want to clip the predicted path at the point of collision.
     if collision_pnts:
         pnt = collision_pnts[0]
-        xs = np.linspace(pnt[0], x[0], 50)
+        xs = np.linspace(pnt[0], x[0], num=50)
 
     figure, axes = plt.subplots()
     axes.set_aspect(1)
