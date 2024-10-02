@@ -63,7 +63,6 @@ def predictOutcome(x_path: Poly, y_path: Poly, t_path: Poly, start_time):
         if outcome == "overshot":
             return "overshot", None, None
         elif outcome == "collision":
-            print("Collision with backboard")
             collision_pnt = (-RR-DB, y_center, t_collision)
             obstraction = "backboard"
         else: # outcome = "miss"
@@ -82,14 +81,11 @@ def predictOutcome(x_path: Poly, y_path: Poly, t_path: Poly, start_time):
     collision_pnts.append((x_center, y_center))
 
     if outcome == "collision":
-        x_path = Poly.fit(ts[0:4], xs[0:4], deg=1, domain=x_path.domain, window=x_path.window)
-        t_path = Poly.fit(xs[0:4], ts[0:4], deg=1, domain=t_path.domain, window=t_path.window)
-        # Simplification. Otherwise we have to solve a constrained optimization problem
-        y_path = Poly.fit(ts[0:4], ys[0:4], deg=1, domain=y_path.domain, window=y_path.window)
-
-        f, a = plt.subplots()
-        a.plot(x_path(ts), y_path(ts))
-        plt.show()
+        N = 10 # Number of samples
+        x_path = Poly.fit(ts[0:N], xs[0:N], deg=1, domain=x_path.domain, window=x_path.window)
+        t_path = Poly.fit(xs[0:N], ts[0:N], deg=1, domain=t_path.domain, window=t_path.window)
+        # Simplification: Otherwise we have to solve a constrained optimization problem
+        y_path = Poly.fit(ts[0:N], ys[0:N], deg=1, domain=y_path.domain, window=y_path.window)
 
         out_, collision_pnts_, paths = predictOutcome(x_path, y_path, t_path, ts[0])
         
@@ -103,16 +99,9 @@ def predictOutcome(x_path: Poly, y_path: Poly, t_path: Poly, start_time):
             ys = ys[condition]
             ts = ts[condition]
             
-            print(xs.shape)
-            print(ys.shape)
-            print(ts.shape)
             xs = np.hstack([xs, x_])
             ys = np.hstack([ys, y_])
             ts = np.hstack([ts, t_])
-            print(xs.shape)
-            print(ys.shape)
-            print(ts.shape)
-
 
         return out_, collision_pnts, (xs, ys, ts)
 
@@ -137,9 +126,6 @@ def doesBallCollideWithRim(x_path: Poly, y_path: Poly, t_path: Poly, start_time)
     condition = np.all([np.isreal(roots_t), roots_t>start_time], axis=0)
     real_roots_t = np.extract(condition, roots_t)
 
-    print("R Start time: ", start_time)
-    print("R Root times: ", real_roots_t)
-
     if real_roots_t.size == 0:
         return "miss", None, None, None
 
@@ -151,8 +137,6 @@ def doesBallCollideWithRim(x_path: Poly, y_path: Poly, t_path: Poly, start_time)
     condition = np.all([d1, d2], axis=0)
     pnts = np.extract(condition , real_roots_x)
 
-    print("R Filtered roots x: ", pnts)
-
     if pnts.size:
         return "score", None, None, None
     else:
@@ -160,13 +144,11 @@ def doesBallCollideWithRim(x_path: Poly, y_path: Poly, t_path: Poly, start_time)
         # radius of the ball R
         condition = np.all([real_roots_x >= -RR, real_roots_x <= (RR + R)], axis=0)
         collision_pnts = np.extract(condition , real_roots_x)
-        print("R Finding collision: ", collision_pnts)
         if collision_pnts.size:
             # If we have two values, we select the one that results in the first collision
             real_roots_t = t_path(collision_pnts)
             
             pnt_t = np.min(real_roots_t)
-            print("R Selected time: ", pnt_t)
 
             if x_path(pnt_t) >= 0: 
                 return "collision", RR, HR, pnt_t
@@ -205,18 +187,12 @@ def findPositionOfBallCollidingWithRimEdge(x_path: Poly, y_path: Poly, t_path: P
     condition = np.all([np.isreal(roots_t), roots_t>start_time], axis=0)
     real_roots_t = np.extract(condition, roots_t)
 
-    print("E Start time: ", start_time)
-    print("E roots time: ", roots_t)
-    print("E  real root times: ", real_roots_t)
-    
     assert real_roots_t.size>0, "We should always have a root at this point."
 
     # We can have at most two collision points at a time
     # We are interested in the collision that takes place first
     root_t = np.min(real_roots_t)
     root_t = np.real(root_t)
-
-    print("E Selected time root: ", root_t)
 
     return x_path(root_t), y_path(root_t), root_t
 
@@ -249,24 +225,15 @@ def findPositionOfBallCollidingWithBackboard(x_path: Poly, y_path: Poly, t_path:
     x_c = x0 + R
 
     t_collision = t_path(x_c)
-    print("B Time of collision: ", t_collision)
-    print("B Time rand: ", t_path(-0.3302+0.12))
-    print("B Start time: ", start_time)
 
     if t_collision <= start_time:
         return "miss", None, None, None
 
-    print(y_path.window)
-    print(x_path.window)
-    print(t_path.window)
     y_c = evaluate(y_path, t_path, x_c)
-    print("B: ", y_c, y_path(t_collision))
 
     if y_c > (HR + HB):
-        print("B Overshot y: ", y_c, HR+HB)
         return "overshot", None, None, None
     else:
-        print("B Selected time: ", t_path(x_c))
         return "collision", x_c, y_c, t_path(x_c)
 
 
@@ -279,12 +246,9 @@ def predictFlightPathPostCollision(x_path: Poly, y_path: Poly, t_path: Poly, cen
         Output:
             xs, ys, ts: A set of points that model the path followed by the ball after the collision
     '''
-    print("In here")
     x_center, y_center = center
     x_r, y_r, t_collision = collision_pnt
     
-    print(t_collision)
-
     # Gradient at the point of collision
     ball_tangent_grad = - (x_r - x_center) / (y_r - y_center)
 
@@ -297,8 +261,6 @@ def predictFlightPathPostCollision(x_path: Poly, y_path: Poly, t_path: Poly, cen
 
     dot = np.dot([nx_circle, ny_circle], [nx_path, ny_path])
 
-    print("Dot: ", dot)
-
     theta = np.atan(ball_tangent_grad)
     if dot < 0:
         rotation_angle = np.pi/2 - np.abs(theta)
@@ -307,10 +269,7 @@ def predictFlightPathPostCollision(x_path: Poly, y_path: Poly, t_path: Poly, cen
     else:
         rotation_angle = -theta
 
-    print("Rot: ", rotation_angle)
-
     # Translation: We rotate about the point of collision
-    print("Center: ", center)
     trans = np.array(center, ndmin=2)
     trans = trans.transpose()
 
@@ -385,7 +344,7 @@ def _vector(grad, x_before, y_before, flight_path=True, x_path=None, y_path=None
         y_after = y_path(t)
     else:
         # The normal of the wall should always point (relatively) towards +x-axis
-        x_after = x_before + 10
+        x_after = x_before + 5
 
         y_after = evaluate(y_path, t_path, x_after)
     
@@ -495,6 +454,7 @@ DB = 0.1016
 df = pd.read_csv("basketball.csv", sep=', ', engine="python")
 
 for i in range(1, 7):
+    print("\n\nBall ", i)
     s1_label = f"b{i}_s1"
     dist1 = readDistances(df, s1_label)
 
@@ -508,18 +468,15 @@ for i in range(1, 7):
 
     # (Least squares) Fit the data to a second order polynomial
     start = x[0] + 1
-    x_poly = Poly.fit(t, x, deg=1, domain=[0, 1000], window=[0, 1000])
+    x_poly = Poly.fit(t, x, deg=1, domain=[0, 10000], window=[0, 10000])
     #x_poly = linear(x, t)
-    print(x_poly)
     # As much as we want to use parametric representation throughout, some of our data is 
     # in (x, y) coordinate frame. We want this intermidiate representation to make it easy to 
     # link the two spaces. 
     # That is, if we have x then what is the corresponding value of y?
-    t_poly = Poly.fit(x, t, deg=1,  domain=[-15, start], window=[-15, start])
+    t_poly = Poly.fit(x, t, deg=1,  domain=[-15, 5*start], window=[-15, 5*start])
     #t_poly = linear()
-    print(t_poly)
-    y_poly = Poly.fit(t, y, deg=2, domain=[0, 1000], window=[0, 1000])
-    print(y_poly)
+    y_poly = Poly.fit(t, y, deg=2, domain=[0, 10000], window=[0, 10000])
     # If x_c and y_c exist then they represent the center of the ball that 
     # collides with either the ring or backboard
     outcome, collision_pnts, post_collision_path = predictOutcome(x_poly, y_poly, t_poly, start_time=0)
