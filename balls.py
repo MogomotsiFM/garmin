@@ -557,7 +557,9 @@ def displayCompletFlightPath(original_data, outcome, pre_collision_path, collisi
     axes.set_title(f"Ball {i} {outcome}")
     filename = os.path.join(images_folder, f"Ball {i} Flight Path")
     plt.savefig(filename)
-    plt.show()
+
+    if debug:
+        plt.show()
 
 
 
@@ -608,15 +610,17 @@ for i in range(1, B+1):
 
     outcome, collision_pnts, post_collision_path, pre_collision_path, original_data = controller(f"b{i}_s1", f"b{i}_s2")
 
-    print("\n\nBall: ", i)
-    print("               ", outcome)
     assessments.append(outcome)
 
     displayCompletFlightPath(original_data, outcome, pre_collision_path, collision_pnts, post_collision_path)
 
 
-print("Write assessments to file")
-with open("assessment.txt", "w") as file:
+print()
+print()
+filename = "assessment.txt"
+print("Assessment output file: ", filename)
+with open(filename, "w") as file:
     for idx, outcome in enumerate(assessments, start=1):
         print(f"{idx} {outcome}", file=file)
 
+print("Images output directory: ", images_folder)
