@@ -1,10 +1,12 @@
+import os
+import time
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
 from numpy.polynomial import Polynomial as Poly
-
 
 def transformToCartesianCoordinates(dist1, dist2):
     # Computing the angle between sensor2 vector and the floor using cosine rule
@@ -71,11 +73,7 @@ def predictOutcome(x_path: Poly, y_path: Poly, t_path: Poly, start_time):
     else: # outcome == "collision"
         x_center, y_center, t_collision = findPositionOfBallCollidingWithRimEdge(x_path, y_path, t_path, x_collision, y_collision, start_time)
         collision_pnt = (x_collision, y_collision, t_collision)
-        #if np.abs(x_collision - RR) < 0.00001:
-        #    obstraction = "r_rim" # Ball collides with the right edge of the rim
-        #else:
-        #   obstraction = "l_rim" # Ball collides with the left edge of the rim
-
+        
     xs, ys, ts = predictFlightPathPostCollision(x_path, y_path, t_path, (x_center, y_center), collision_pnt)
 
     collision_pnts = []
@@ -304,16 +302,18 @@ def predictFlightPathPostCollision(x_path: Poly, y_path: Poly, t_path: Poly, cen
     # Finally, undo the initial translation
     post_collision_xs, post_collision_ys = translate(new_xs, new_ys, trans)
 
-    plotDebugGraphs(x_path,
-                    y_path,
-                    t_path,
-                    ts,
-                    trans_xs, trans_ys,
-                    reflected_xs, reflected_ys,
-                    new_xs, new_ys,
-                    post_collision_xs, post_collision_ys,
-                    collision_pnt, center,
-                    ball_tangent_grad)
+    if debug:
+        plotDebugGraphs(
+            x_path,
+            y_path,
+            t_path,
+            ts,
+            trans_xs, trans_ys,
+            reflected_xs, reflected_ys,
+            new_xs, new_ys,
+            post_collision_xs, post_collision_ys,
+            collision_pnt, center,
+            ball_tangent_grad)
 
     return post_collision_xs, post_collision_ys, ts
 
@@ -376,7 +376,6 @@ def plotDebugGraphs(x_path: Poly,
     axes.set_aspect(1)
 
     # We need this in order to display the entire flight path of the ball
-    #t_ = np.linspace(0, np.max(ts), num=100)
     axes.plot(x_path(ts), y_path(ts), label="1. Estimated flight path")
 
     axes.plot(trans_xs, trans_ys, '+', label="2. Translated and rotated")
@@ -418,7 +417,9 @@ def plotDebugGraphs(x_path: Poly,
 
     axes.legend(shadow=True)
     axes.set_title("Generating post-collision path")
-    
+
+    filename = os.path.join(images_folder, debug_folder, f"image-{time.time()}.png")
+    plt.savefig(filename)
     plt.show()
 
 
@@ -436,8 +437,30 @@ def rotate(xs, ys, theta):
     return new_xs[0], new_ys[0]
 
 
+def createImagesDirectory(images_folder):
+    try:
+        os.mkdir(images_folder)
+    except Exception as exp:
+        print(exp)
+
+    if debug:
+        # Create a folder for each of the basketballs
+        for i in range(1, B+1):
+            debug_folder = f"ball-{i}"
+            
+            try:
+                foldername = os.path.join(images_folder, debug_folder)
+                os.mkdir(foldername)
+            except Exception as exp:
+                print(exp)
+
+
+
 
 debug = True
+
+# Number of balls
+B = 6
 
 # Distance between sensors in meters
 L = 12.4
@@ -459,7 +482,19 @@ DB = 0.1016
 
 df = pd.read_csv("basketball.csv", sep=', ', engine="python")
 
-for i in range(1, 7):
+# Keep a list of assessments and write them to file when done.
+assessments = []
+
+# A global folder name to store debug figures for a given ball.
+debug_folder = ""
+
+# A folder for all images
+images_folder = "images"
+createImagesDirectory(images_folder)
+
+for i in range(1, B+1):
+    debug_folder = f"ball-{i}"
+
     s1_label = f"b{i}_s1"
     dist1 = readDistances(df, s1_label)
 
@@ -479,9 +514,8 @@ for i in range(1, 7):
     # in (x, y) coordinate frame. We want this intermidiate representation to make it easy to 
     # link the two spaces. 
     # That is, if we have x then what is the corresponding value of y?
-    
+
     t_poly = Poly.fit(x, t, deg=1, domain=[-10*start, 10*start], window=[-10*start, 10*start])
-    #y_poly = Poly.fit(t, y, deg=2, domain=[0, 10000], window=[0, 10000])
     y_ = Poly.fit(x, y, deg=2, domain=[-10*start, 10*start], window=[-10*start, 10*start])
     y_poly = y_(x_poly)
 
@@ -490,6 +524,7 @@ for i in range(1, 7):
     outcome, collision_pnts, post_collision_path = predictOutcome(x_poly, y_poly, t_poly, start_time=0)
     print("\n\nBall: ", i)
     print("               ", outcome)
+    assessments.append(outcome)
 
     if post_collision_path:
         xs, ys, ts = post_collision_path
@@ -527,13 +562,22 @@ for i in range(1, 7):
             axes.add_artist(circle)
 
         xs, ys, ts = post_collision_path
-        condition = np.all([xs >= -1, xs <= x[0]], axis=0)
+        condition = np.all([xs >= -1, xs <= x[0], ys >= 0], axis=0)
         xs = xs[condition]
         ys = ys[condition]
 
         axes.plot(xs, ys, '*', label="Post collision path")
 
     axes.legend(shadow=True)
-    axes.set_title(outcome)
+    
+    axes.set_title(f"Ball {i} {outcome}")
+    filename = os.path.join(images_folder, f"Ball {i} Flight Path")
+    plt.savefig(filename)
     plt.show()
+
+
+print("Write assessments to file")
+with open("assessment.txt", "w") as file:
+    for idx, outcome in enumerate(assessments, start=1):
+        print(f"{idx} {outcome}", file=file)
 
