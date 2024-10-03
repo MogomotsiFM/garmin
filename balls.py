@@ -87,8 +87,8 @@ def predictOutcome(x_path: Poly, y_path: Poly, t_path: Poly, start_time):
         # Simplification: Otherwise we have to solve a constrained optimization problem
         y_path = Poly.fit(ts[0:N], ys[0:N], deg=1, domain=y_path.domain, window=y_path.window)
 
-        out_, collision_pnts_, paths = predictOutcome(x_path, y_path, t_path, ts[0])
-        
+        out_, collision_pnts_, paths = predictOutcome(x_path, y_path, t_path, (ts[0] + ts[1])/2)
+                
         if paths:
             collision_pnts.extend(collision_pnts_)
 
@@ -168,7 +168,6 @@ def findPositionOfBallCollidingWithRimEdge(x_path: Poly, y_path: Poly, t_path: P
             (x_rim, y_rim): The cartesian coordinate of an edge of the rim
             start_time:
     '''
-
     # Let the Polynomial package do the heavy lifting
     #   Construct the equation of a circle using the Polynomial package
     #       (x - x_c)**2 + (y - y_c)**2 = R*R
@@ -278,7 +277,11 @@ def predictFlightPathPostCollision(x_path: Poly, y_path: Poly, t_path: Poly, cen
     # Sample the path after the point of collision
     # This simulates tracking the ball past the collision point
     # The end time of our simulation is not easy to estimate because we do not even know the unit of time!
-    ts = np.linspace(t_collision, 5*t_collision, num=400)
+    start = t_collision
+    end = 5*t_collision
+    num_points = np.ceil( (end - start) / (DELTA_T/10) + 1)
+    ts, dt = np.linspace(start, end, int(num_points), retstep=True)
+    print("Comparing dts: ", DELTA_T, dt)
     xs = x_path(ts)
     ys = y_path(ts)
 
@@ -502,6 +505,10 @@ HB = 1.1
 # Distance of the backboard from the rim in meters
 DB = 0.1016
 
+# Time between measurements
+# It is set when we first model the given data
+DELTA_T = 0
+
 df = pd.read_csv("basketball.csv", sep=', ', engine="python")
 
 # Keep a list of assessments and write them to file when done.
@@ -526,7 +533,8 @@ for i in range(1, B+1):
     x, y = transformToCartesianCoordinates(dist1, dist2)
 
     # We need parametric models of the flight path
-    t = np.linspace(0, x.size/2, num=x.size)
+    t, DELTA_T = np.linspace(0, x.size/2, num=x.size, retstep=True)
+    print("Delta T: ", DELTA_T)
 
     # (Least squares) Fit the data to a second order polynomial
     start = x[0] + 1
@@ -582,6 +590,8 @@ for i in range(1, B+1):
         for x_c, y_c in collision_pnts:
             circle = patches.Circle((x_c, y_c), R, fill=False, label="Ball(s) at collision point", color="red")
             axes.add_artist(circle)
+
+            print(x_c, y_c)
 
         xs, ys, ts = post_collision_path
         condition = np.all([xs >= -1, xs <= x[0], ys >= 0], axis=0)
