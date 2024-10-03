@@ -155,7 +155,6 @@ def doesBallCollideWithRim(x_path: Poly, y_path: Poly, t_path: Poly, start_time)
             else:
                 return "collision", -RR, HR, pnt_t
         else:
-            # This should not happen    
             return "miss", None, None, None
 
 
