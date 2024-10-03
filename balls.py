@@ -379,7 +379,7 @@ def plotDebugGraphs(x_path: Poly,
     axes.set_aspect(1)
 
     # We need this in order to display the entire flight path of the ball
-    axes.plot(x_path(ts), y_path(ts), label="1. Estimated flight path")
+    axes.plot(x_path(ts), y_path(ts), label="1. Path extrapolation beyond collision")
 
     axes.plot(trans_xs, trans_ys, '+', label="2. Translated and rotated")
 
