@@ -84,11 +84,12 @@ def predictOutcome(x_path: Poly, y_path: Poly, t_path: Poly, start_time):
     if outcome == "collision":
         old_path = (x_path, y_path, t_path)
         x_path, t_path, y_path = modelPostCollisionPath(xs, ys, ts, old_path)
-        f, x = plt.subplots()
-        x_, y_ = x_path(ts), y_path(ts)
-        plt.plot(x_, y_)
-
-        plt.plot(xs[0:5], ys[0:5])
+        
+        # Only the first few data points after the collision are accurate.
+        # The further we go from the collision the more they drift away from the true path.
+        # Hence, it is better to replace the rest with the model
+        xs = x_path(ts)
+        ys = y_path(ts)
 
         out_, collision_pnts_, paths = predictOutcome(x_path, y_path, t_path, 1.001*ts[0])
                 
@@ -97,7 +98,7 @@ def predictOutcome(x_path: Poly, y_path: Poly, t_path: Poly, start_time):
 
             x_, y_, t_ = paths
 
-            condition = ts <= t_[0]            
+            condition = ts <= t_[0]           
             xs = xs[condition]
             ys = ys[condition]
             ts = ts[condition]
@@ -360,15 +361,19 @@ def vector(x_path: Poly, y_path: Poly, grad, x_before, y_before, t_collision):
 
 def _vector(grad, x_before, y_before, flight_path=True, x_path=None, y_path=None, t_path=None, t_collision=None):
     # y = mx + c
-    c = y_before - grad*x_before
+    # c = y_before - grad*x_before
 
     # We need two point to compute a normal
     if flight_path:
+        y_prime = y_path.deriv()
+        m = y_prime(t_collision)
+        c = y_before - m * x_before
+
         # Take a step forward in time...
         t = t_collision + 10
-
+        y_after = m * t + c
         x_after = x_path(t)
-        y_after = y_path(t)
+
     else:
         # The normal of the wall should always point (relatively) towards +x-axis
         x_after = x_before + 5
@@ -400,7 +405,7 @@ def plotDebugGraphs(x_path: Poly,
     axes.set_aspect(1)
 
     # We need this in order to display the entire flight path of the ball
-    axes.plot(x_path(ts), y_path(ts), label="1. Path extrapolation beyond collision")
+    axes.plot(x_path(ts), y_path(ts), '*', label="1. Path extrapolation beyond collision")
 
     axes.plot(trans_xs, trans_ys, '+', label="2. Translated and rotated")
 
@@ -428,7 +433,7 @@ def plotDebugGraphs(x_path: Poly,
     
     c = y_center - x_center*path_tangent_grad
     # This plots the line that estimates the path followed by the ball at the time of collision
-    axes.plot([-2, 2], [-2*path_tangent_grad + c, 2*path_tangent_grad + c], label="Flight path tangent")
+    axes.plot([-2, 2], [-2*path_tangent_grad + c, 2*path_tangent_grad + c], '-+', label="Flight path tangent")
 
     # The line that is perpendicular to the tangent of the ball
     # It just makes it easier to see that the angle of incident is equal to the angle of reflection.
@@ -553,15 +558,7 @@ def displayCompletFlightPath(original_data, outcome, pre_collision_path, collisi
     axes.plot([-RR-DB, -RR-DB], [HR, HR+HB], label="Backboard")
 
     if debug:
-        y_rr = evaluate(y_poly, t_poly, RR)
-        circle_l = patches.Circle( (RR, y_rr), R, fill=False, label="Ball(First rim edge)", color="green")
-        axes.add_artist(circle_l)
-
-        y_rr = evaluate(y_poly, t_poly, -RR)
-        circle_2 = patches.Circle( (-RR, y_rr), R, fill=False, label="Second rim edge", color="blue")
-        axes.add_artist(circle_2)
-
-        axes.plot([RR, RR], [HR, HR+R])
+        axes.plot([RR, RR], [HR, HR+R], label="Vertical rim clearance")
 
     if collision_pnts:
         for x_c, y_c in collision_pnts:
@@ -573,7 +570,7 @@ def displayCompletFlightPath(original_data, outcome, pre_collision_path, collisi
         xs = xs[condition]
         ys = ys[condition]
 
-        axes.plot(xs, ys, '*', label="Post collision path")
+        axes.plot(xs, ys, label="Post collision path")
 
     axes.legend(shadow=True)
     
