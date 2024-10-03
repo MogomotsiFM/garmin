@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from scipy.optimize import lsq_linear
 
 from numpy.polynomial import Polynomial as Poly
 
@@ -81,13 +82,15 @@ def predictOutcome(x_path: Poly, y_path: Poly, t_path: Poly, start_time):
     collision_pnts.append((x_center, y_center))
 
     if outcome == "collision":
-        N = 10 # Number of samples
-        x_path = Poly.fit(ts[0:N], xs[0:N], deg=1, domain=x_path.domain, window=x_path.window)
-        t_path = Poly.fit(xs[0:N], ts[0:N], deg=1, domain=t_path.domain, window=t_path.window)
-        # Simplification: Otherwise we have to solve a constrained optimization problem
-        y_path = Poly.fit(ts[0:N], ys[0:N], deg=1, domain=y_path.domain, window=y_path.window)
+        old_path = (x_path, y_path, t_path)
+        x_path, t_path, y_path = modelPostCollisionPath(xs, ys, ts, old_path)
+        f, x = plt.subplots()
+        x_, y_ = x_path(ts), y_path(ts)
+        plt.plot(x_, y_)
 
-        out_, collision_pnts_, paths = predictOutcome(x_path, y_path, t_path, (ts[0] + ts[1])/2)
+        plt.plot(xs[0:5], ys[0:5])
+
+        out_, collision_pnts_, paths = predictOutcome(x_path, y_path, t_path, 1.001*ts[0])
                 
         if paths:
             collision_pnts.extend(collision_pnts_)
@@ -108,11 +111,31 @@ def predictOutcome(x_path: Poly, y_path: Poly, t_path: Poly, start_time):
     return outcome, collision_pnts, (xs, ys, ts)
 
 
+def modelPostCollisionPath(xs, ys, ts, old_path):
+    x_path, y_path, t_path = old_path
+
+    # We only use the first few points in this model.
+    # This is perfectly fine because as we move further from the collision the
+    # predicted path strays further from the true path
+    normalized_gravity = y_path.coef[2]
+    N = 2
+    ys = ys[0:N] - normalized_gravity*ts[0:N]*ts[0:N]
+
+    x_path = Poly.fit(ts[0:N], xs[0:N], deg=1, domain=x_path.domain, window=x_path.window)
+    t_path = Poly.fit(xs[0:N], ts[0:N], deg=1, domain=t_path.domain, window=t_path.window)
+    y_path_ = Poly.fit(ts[0:N], ys[0:N], deg=1, domain=y_path.domain, window=y_path.window)
+    
+    gravity = Poly([0, 0, normalized_gravity], domain=y_path.domain, window=y_path.window)
+
+    y = y_path_+gravity
+    return x_path, t_path, y
+
+
 def doesBallCollideWithRim(x_path: Poly, y_path: Poly, t_path: Poly, start_time):
     '''
         We want find to the point of intersection of two equations
            y = HR (The height of the rim)
-           y = path
+           y = y_path
 
         Output:
             outcome: "score" | "collision" | "miss",
@@ -171,8 +194,7 @@ def findPositionOfBallCollidingWithRimEdge(x_path: Poly, y_path: Poly, t_path: P
     #   Construct the equation of a circle using the Polynomial package
     #       (x - x_c)**2 + (y - y_c)**2 = R*R
     #       where x = x_rim , y = y_rim and R is the radius of the ball
-    #       x_c is unknown and y_c = path 
-
+    #       x_c = x_path and y_c = y_path 
     p1 = x_path - x_rim
     p1 = p1 * p1
     
@@ -538,6 +560,8 @@ def displayCompletFlightPath(original_data, outcome, pre_collision_path, collisi
         y_rr = evaluate(y_poly, t_poly, -RR)
         circle_2 = patches.Circle( (-RR, y_rr), R, fill=False, label="Second rim edge", color="blue")
         axes.add_artist(circle_2)
+
+        axes.plot([RR, RR], [HR, HR+R])
 
     if collision_pnts:
         for x_c, y_c in collision_pnts:
