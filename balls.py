@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 
 import pandas as pd
@@ -455,9 +456,30 @@ def createImagesDirectory(images_folder):
                 print(exp)
 
 
+def isDebugModeEnabled(argv):
+    print(sys.argv)
+
+    debug = False
+    
+    if len(argv) > 1:
+        if argv[1] == "-d":
+            debug = True
+        else:
+            print()
+            print("Help")
+            print("To run in debug mode: python balls.py -d")
+            print("To run in release mode: python balls.py")
+
+            exit()
+
+    return debug
 
 
-debug = True
+
+
+
+debug = isDebugModeEnabled(sys.argv)
+print("Debug mode: ", debug)
 
 # Number of balls
 B = 6
