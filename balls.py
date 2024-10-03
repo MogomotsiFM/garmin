@@ -228,7 +228,7 @@ def findPositionOfBallCollidingWithBackboard(x_path: Poly, y_path: Poly, t_path:
     if t_collision <= start_time:
         return "miss", None, None, None
 
-    y_c = evaluate(y_path, t_path, x_c)
+    y_c = y_path(t_collision)
 
     if y_c > (HR + HB):
         return "overshot", None, None, None
