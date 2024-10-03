@@ -275,7 +275,7 @@ def predictFlightPathPostCollision(x_path: Poly, y_path: Poly, t_path: Poly, cen
 
     # Explanation?
     # Compute the normal of the collision surface
-    nx_circle, ny_circle = normal(y_path, t_path, ball_tangent_grad, x_r, y_r)
+    nx_circle, ny_circle = normal(y_path, t_path, x_r, y_r)
     deriv = y_path.deriv()
     deriv.window =  y_path.window
     deriv.domain =  y_path.domain
@@ -343,15 +343,12 @@ def predictFlightPathPostCollision(x_path: Poly, y_path: Poly, t_path: Poly, cen
     return post_collision_xs, post_collision_ys, ts
 
 
-def normal(y_path: Poly, t_path: Poly, grad, x, y):
-    grad = -1 / grad
-    
-    return _vector(grad, x, y, flight_path=False, y_path=y_path, t_path=t_path)
+def normal(y_path: Poly, t_path: Poly, x, y):
+    return _vector(x, y, flight_path=False, y_path=y_path, t_path=t_path)
 
 
 def vector(x_path: Poly, y_path: Poly, grad, x_before, y_before, t_collision):
-    return _vector(grad,
-                   x_before, 
+    return _vector(x_before, 
                    y_before, 
                    flight_path=True, 
                    x_path=x_path, 
@@ -359,7 +356,7 @@ def vector(x_path: Poly, y_path: Poly, grad, x_before, y_before, t_collision):
                    t_collision=t_collision)
 
 
-def _vector(grad, x_before, y_before, flight_path=True, x_path=None, y_path=None, t_path=None, t_collision=None):
+def _vector(x_before, y_before, flight_path=True, x_path=None, y_path=None, t_path=None, t_collision=None):
     # y = mx + c
     # c = y_before - grad*x_before
 
