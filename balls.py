@@ -184,18 +184,6 @@ def doesBallCollideWithRim(x_path: Poly, y_path: Poly, t_path: Poly, start_time)
             return "miss", None, None, None
 
 
-def distance(p1, p2):
-    x1, y1 = p1
-    x2, y2 = p2
-
-    dx = x2 - x1
-    dy = y2 - y1
-
-    dist = dx*dx + dy*dy
-
-    return np.min(dist), np.argmin(dist)
-
-
 def findPositionOfBallCollidingWithRimEdge(x_path: Poly, y_path: Poly, t_path: Poly, x_rim, y_rim, start_time):
     '''
         Input:
