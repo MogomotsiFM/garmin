@@ -118,8 +118,10 @@ def modelPostCollisionPath(xs, ys, ts, old_path):
     # We only use the first few points in this model.
     # This is perfectly fine because as we move further from the collision the
     # predicted path strays further from the true path
-    normalized_gravity = y_path.coef[2]
-    N = 2
+    normalized_gravity = y_path.deriv(2)
+    normalized_gravity = normalized_gravity(0) / 2
+
+    N = 3
     ys = ys[0:N] - normalized_gravity*ts[0:N]*ts[0:N]
 
     x_path = Poly.fit(ts[0:N], xs[0:N], deg=1, domain=x_path.domain, window=x_path.window)
@@ -129,6 +131,7 @@ def modelPostCollisionPath(xs, ys, ts, old_path):
     gravity = Poly([0, 0, normalized_gravity], domain=y_path.domain, window=y_path.window)
 
     y = y_path_+gravity
+    
     return x_path, t_path, y
 
 
@@ -623,6 +626,7 @@ images_folder = "images"
 createImagesDirectory(images_folder)
 
 for i in range(1, B+1):
+    print(f"Ball: ", i)
     debug_folder = f"ball-{i}"
 
     outcome, collision_pnts, post_collision_path, pre_collision_path, original_data = controller(f"b{i}_s1", f"b{i}_s2")
