@@ -281,7 +281,6 @@ def predictFlightPathPostCollision(x_path: Poly, y_path: Poly, t_path: Poly, cen
     end = 5*t_collision
     num_points = np.ceil( (end - start) / (DELTA_T/10) + 1)
     ts, dt = np.linspace(start, end, int(num_points), retstep=True)
-    print("Comparing dts: ", DELTA_T, dt)
     xs = x_path(ts)
     ys = y_path(ts)
 
@@ -460,8 +459,6 @@ def createImagesDirectory(images_folder):
 
 
 def isDebugModeEnabled(argv):
-    print(sys.argv)
-
     debug = False
     
     if len(argv) > 1:
@@ -476,6 +473,91 @@ def isDebugModeEnabled(argv):
             exit()
 
     return debug
+
+
+def controller(s1_label, s2_label):
+    dist1 = readDistances(df, s1_label)
+
+    dist2 = readDistances(df, s2_label)
+
+    x, y = transformToCartesianCoordinates(dist1, dist2)
+
+    # We need parametric models of the flight path
+    global DELTA_T
+    t, DELTA_T = np.linspace(0, x.size/2, num=x.size, retstep=True)
+
+    # (Least squares) Fit the data to a second order polynomial
+    start = x[0] - 1
+    x_poly = Poly.fit(t, x, deg=1, domain=[0, 10000], window=[0, 10000])
+    # As much as we want to use parametric representation throughout, some of our data is 
+    # in (x, y) coordinate frame. We want this intermidiate representation to make it easy to 
+    # link the two spaces. 
+    # That is, if we have x then what is the corresponding value of y?
+
+    t_poly = Poly.fit(x, t, deg=1, domain=[-10*start, 10*start], window=[-10*start, 10*start])
+    y_ = Poly.fit(x, y, deg=2, domain=[-10*start, 10*start], window=[-10*start, 10*start])
+    y_poly = y_(x_poly)
+
+    # If x_c and y_c exist then they represent the center of the ball that 
+    # collides with either the ring or backboard
+    outcome, collision_pnts, post_collision_path = predictOutcome(x_poly, y_poly, t_poly, start_time=0)
+
+    return outcome, collision_pnts, post_collision_path, (x_poly, t_poly, y_poly), (x, y)
+
+
+def displayCompletFlightPath(original_data, outcome, pre_collision_path, collision_pnts, post_collision_path):
+    x, y = original_data
+
+    x_poly, t_poly, y_poly = pre_collision_path
+    
+    if post_collision_path:
+        xs, ys, ts = post_collision_path
+
+    xs = np.linspace(-1, x[0], num=50)
+    # However, if there is a collision, then set want to clip the predicted path at the point of collision.
+    if collision_pnts:
+        pnt = collision_pnts[0]
+        xs = np.linspace(pnt[0], x_poly(0), num=50)
+
+    figure, axes = plt.subplots()
+    axes.set_aspect(1)
+
+    ys = evaluate(y_poly, t_poly, xs)
+    axes.plot(xs, ys, label="Estimate flight path")
+    axes.plot(x, y, label="Measured fligh path")
+    # Plot a line that represents the rim
+    axes.plot([-RR, RR], [3.05, 3.05], label="Rim")
+
+    # Plot the line that represents the backboard
+    axes.plot([-RR-DB, -RR-DB], [HR, HR+HB], label="Backboard")
+
+    if debug:
+        y_rr = evaluate(y_poly, t_poly, RR)
+        circle_l = patches.Circle( (RR, y_rr), R, fill=False, label="Ball(First rim edge)", color="green")
+        axes.add_artist(circle_l)
+
+        y_rr = evaluate(y_poly, t_poly, -RR)
+        circle_2 = patches.Circle( (-RR, y_rr), R, fill=False, label="Second rim edge", color="blue")
+        axes.add_artist(circle_2)
+
+    if collision_pnts:
+        for x_c, y_c in collision_pnts:
+            circle = patches.Circle((x_c, y_c), R, fill=False, label="Ball(s) at collision point", color="red")
+            axes.add_artist(circle)
+
+        xs, ys, ts = post_collision_path
+        condition = np.all([xs >= -1, xs <= x[0], ys >= 0], axis=0)
+        xs = xs[condition]
+        ys = ys[condition]
+
+        axes.plot(xs, ys, '*', label="Post collision path")
+
+    axes.legend(shadow=True)
+    
+    axes.set_title(f"Ball {i} {outcome}")
+    filename = os.path.join(images_folder, f"Ball {i} Flight Path")
+    plt.savefig(filename)
+    plt.show()
 
 
 
@@ -524,88 +606,13 @@ createImagesDirectory(images_folder)
 for i in range(1, B+1):
     debug_folder = f"ball-{i}"
 
-    s1_label = f"b{i}_s1"
-    dist1 = readDistances(df, s1_label)
+    outcome, collision_pnts, post_collision_path, pre_collision_path, original_data = controller(f"b{i}_s1", f"b{i}_s2")
 
-    s2_label = f"b{i}_s2"
-    dist2 = readDistances(df, s2_label)
-
-    x, y = transformToCartesianCoordinates(dist1, dist2)
-
-    # We need parametric models of the flight path
-    t, DELTA_T = np.linspace(0, x.size/2, num=x.size, retstep=True)
-    print("Delta T: ", DELTA_T)
-
-    # (Least squares) Fit the data to a second order polynomial
-    start = x[0] + 1
-    x_poly = Poly.fit(t, x, deg=1, domain=[0, 10000], window=[0, 10000])
-    #x_poly = linear(x, t)
-    # As much as we want to use parametric representation throughout, some of our data is 
-    # in (x, y) coordinate frame. We want this intermidiate representation to make it easy to 
-    # link the two spaces. 
-    # That is, if we have x then what is the corresponding value of y?
-
-    t_poly = Poly.fit(x, t, deg=1, domain=[-10*start, 10*start], window=[-10*start, 10*start])
-    y_ = Poly.fit(x, y, deg=2, domain=[-10*start, 10*start], window=[-10*start, 10*start])
-    y_poly = y_(x_poly)
-
-    # If x_c and y_c exist then they represent the center of the ball that 
-    # collides with either the ring or backboard
-    outcome, collision_pnts, post_collision_path = predictOutcome(x_poly, y_poly, t_poly, start_time=0)
     print("\n\nBall: ", i)
     print("               ", outcome)
     assessments.append(outcome)
 
-    if post_collision_path:
-        xs, ys, ts = post_collision_path
-
-    xs = np.linspace(-1, x[0], num=50)
-    # However, if there is a collision, then se want to clip the predicted path at the point of collision.
-    if collision_pnts:
-        pnt = collision_pnts[0]
-        xs = np.linspace(pnt[0], x[0], num=50)
-
-    figure, axes = plt.subplots()
-    axes.set_aspect(1)
-
-    ys = evaluate(y_poly, t_poly, xs)
-    axes.plot(xs, ys, label="Estimate flight path")
-    axes.plot(x, y, label="Measured fligh path")
-    # Plot a line that represents the rim
-    axes.plot([-RR, RR], [3.05, 3.05], label="Rim")
-
-    # Plot the line that represents the backboard
-    axes.plot([-RR-DB, -RR-DB], [HR, HR+HB], label="Backboard")
-
-    if debug:
-        y_rr = evaluate(y_poly, t_poly, RR)
-        circle_l = patches.Circle( (RR, y_rr), R, fill=False, label="Ball(First rim edge)", color="green")
-        axes.add_artist(circle_l)
-
-        y_rr = evaluate(y_poly, t_poly, -RR)
-        circle_2 = patches.Circle( (-RR, y_rr), R, fill=False, label="Second rim edge", color="blue")
-        axes.add_artist(circle_2)
-
-    if collision_pnts:
-        for x_c, y_c in collision_pnts:
-            circle = patches.Circle((x_c, y_c), R, fill=False, label="Ball(s) at collision point", color="red")
-            axes.add_artist(circle)
-
-            print(x_c, y_c)
-
-        xs, ys, ts = post_collision_path
-        condition = np.all([xs >= -1, xs <= x[0], ys >= 0], axis=0)
-        xs = xs[condition]
-        ys = ys[condition]
-
-        axes.plot(xs, ys, '*', label="Post collision path")
-
-    axes.legend(shadow=True)
-    
-    axes.set_title(f"Ball {i} {outcome}")
-    filename = os.path.join(images_folder, f"Ball {i} Flight Path")
-    plt.savefig(filename)
-    plt.show()
+    displayCompletFlightPath(original_data, outcome, pre_collision_path, collision_pnts, post_collision_path)
 
 
 print("Write assessments to file")
