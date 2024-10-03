@@ -157,11 +157,7 @@ def doesBallCollideWithRim(x_path: Poly, y_path: Poly, t_path: Poly, start_time)
         return "miss", None, None, None
 
     real_roots_x = x_path(real_roots_t)
-    # Distance from the right edge of the rim to the center of the ball
-    d1 = (real_roots_x <= ( RR - R))
-    # Distance from the left edge of the rim to the center of the ball
-    d2 = (real_roots_x >= (-RR + R))
-    condition = np.all([d1, d2], axis=0)
+    condition = np.abs(real_roots_x) <= (RR-R)
     pnts = np.extract(condition , real_roots_x)
 
     if pnts.size:
