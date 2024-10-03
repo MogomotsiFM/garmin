@@ -182,26 +182,6 @@ def doesBallCollideWithRim(x_path: Poly, y_path: Poly, t_path: Poly, start_time)
                 return "collision", -RR, HR, real_roots_t[idx2]
         else:
             return "miss", None, None, None
-        
-        # Notice how we include points that are just outside the rim by extending the search window by the 
-        # radius of the ball R
-        condition = np.all([real_roots_x >= -RR, real_roots_x <= (RR + R)], axis=0)
-        collision_pnts = np.extract(condition , real_roots_x)
-        if collision_pnts.size:
-            # If we have two values, we select the one that results in the first collision
-            real_roots_t = t_path(collision_pnts)
-            
-            pnt_t = np.min(real_roots_t)
-
-            if x_path(pnt_t) >= 0:
-                print("collision", RR, HR, pnt_t) 
-                return "collision", RR, HR, pnt_t
-            else:
-                print("collision", -RR, HR, pnt_t)
-                return "collision", -RR, HR, pnt_t
-        else:
-            print("miss", None, None, None)
-            return "miss", None, None, None
 
 
 def distance(p1, p2):
