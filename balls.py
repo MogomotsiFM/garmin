@@ -6,7 +6,6 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from scipy.optimize import lsq_linear
 
 from numpy.polynomial import Polynomial as Poly
 
@@ -90,17 +89,15 @@ def predictOutcome(x_path: Poly, y_path: Poly, t_path: Poly, start_time):
         # Only the first few data points after the collision are accurate.
         # The further we go from the collision the more they drift away from the true path.
         # Hence, it is better to replace the rest with the model
-        xs = x_path(ts)
-        ys = y_path(ts)
-
-        out_, collision_pnts_, paths = predictOutcome(x_path, y_path, t_path, 1.001*ts[0])
+        start = (ts[0] + ts[1])/2
+        out_, collision_pnts_, paths = predictOutcome(x_path, y_path, t_path, start)
                 
         if paths:
             collision_pnts.extend(collision_pnts_)
 
             x_, y_, t_ = paths
 
-            condition = ts <= t_[0]           
+            condition = ts <= start
             xs = xs[condition]
             ys = ys[condition]
             ts = ts[condition]
@@ -123,12 +120,13 @@ def modelPostCollisionPath(xs, ys, ts, old_path):
     normalized_gravity = y_path.deriv(2)
     normalized_gravity = normalized_gravity(0) / 2
 
-    N = 3
-    ys = ys[0:N] - normalized_gravity*ts[0:N]*ts[0:N]
+    N = 5
+    # There is a bug in the code that causes the first point to be out of whack!
+    ys = ys[1:N] - normalized_gravity*ts[1:N]*ts[1:N]
 
-    x_path = Poly.fit(ts[0:N], xs[0:N], deg=1, domain=x_path.domain, window=x_path.window)
-    t_path = Poly.fit(xs[0:N], ts[0:N], deg=1, domain=t_path.domain, window=t_path.window)
-    y_path_ = Poly.fit(ts[0:N], ys[0:N], deg=1, domain=y_path.domain, window=y_path.window)
+    x_path = Poly.fit(ts[1:N], xs[1:N], deg=1, domain=x_path.domain, window=x_path.window)
+    t_path = Poly.fit(xs[1:N], ts[1:N], deg=1, domain=t_path.domain, window=t_path.window)
+    y_path_ = Poly.fit(ts[1:N], ys, deg=1, domain=y_path.domain, window=y_path.window)
     
     gravity = Poly([0, 0, normalized_gravity], domain=y_path.domain, window=y_path.window)
 
@@ -279,8 +277,7 @@ def predictFlightPathPostCollision(x_path: Poly, y_path: Poly, t_path: Poly, cen
     deriv = y_path.deriv()
     deriv.window =  y_path.window
     deriv.domain =  y_path.domain
-    path_tangent_grad = evaluate(deriv, t_path, x_center)
-    nx_path, ny_path = vector(x_path, y_path, path_tangent_grad, x_center, y_center, t_collision)
+    nx_path, ny_path = vector(x_path, y_path, x_center, y_center, t_collision)
 
     dot = np.dot([nx_circle, ny_circle], [nx_path, ny_path])
 
@@ -347,7 +344,7 @@ def normal(y_path: Poly, t_path: Poly, x, y):
     return _vector(x, y, flight_path=False, y_path=y_path, t_path=t_path)
 
 
-def vector(x_path: Poly, y_path: Poly, grad, x_before, y_before, t_collision):
+def vector(x_path: Poly, y_path: Poly, x_before, y_before, t_collision):
     return _vector(x_before, 
                    y_before, 
                    flight_path=True, 
@@ -364,7 +361,7 @@ def _vector(x_before, y_before, flight_path=True, x_path=None, y_path=None, t_pa
     if flight_path:
         y_prime = y_path.deriv()
         m = y_prime(t_collision)
-        c = y_before - m * x_before
+        c = y_before - m * t_collision
 
         # Take a step forward in time...
         t = t_collision + 10
@@ -423,11 +420,7 @@ def plotDebugGraphs(x_path: Poly,
     # We want to plot the line that estimates the path followed by the ball at the time of collision
     x_center, y_center = center
     
-    deriv = y_path.deriv()
-    deriv.window = y_path.window
-    deriv.domain = y_path.domain
-    path_tangent_grad = evaluate(deriv, t_path, x_center)
-    
+    path_tangent_grad = gradient(y_path, t_path, x_center)    
     c = y_center - x_center*path_tangent_grad
     # This plots the line that estimates the path followed by the ball at the time of collision
     axes.plot([-2, 2], [-2*path_tangent_grad + c, 2*path_tangent_grad + c], '-+', label="Flight path tangent")
@@ -447,6 +440,13 @@ def plotDebugGraphs(x_path: Poly,
     filename = os.path.join(images_folder, debug_folder, f"image-{time.time()}.png")
     plt.savefig(filename)
     plt.show()
+
+
+def gradient(y_path, t_path, x):
+    y_x = y_path(t_path)
+    y_prime_x = y_x.deriv()
+
+    return y_prime_x(x)
 
 
 def rotate(xs, ys, theta):
