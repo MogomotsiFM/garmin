@@ -89,6 +89,9 @@ def predictOutcome(x_path: Poly, y_path: Poly, t_path: Poly, start_time):
         # Only the first few data points after the collision are accurate.
         # The further we go from the collision the more they drift away from the true path.
         # Hence, it is better to replace the rest with the model
+        xs = x_path(ts)
+        ys = y_path(ts)
+        
         start = (ts[0] + ts[1])/2
         out_, collision_pnts_, paths = predictOutcome(x_path, y_path, t_path, start)
                 
@@ -324,7 +327,7 @@ def predictFlightPathPostCollision(x_path: Poly, y_path: Poly, t_path: Poly, cen
     # Finally, undo the initial translation
     post_collision_xs, post_collision_ys = translate(new_xs, new_ys, trans)
 
-    if debug:
+    if debug or save_figures:
         plotDebugGraphs(
             x_path,
             y_path,
@@ -439,7 +442,9 @@ def plotDebugGraphs(x_path: Poly,
 
     filename = os.path.join(images_folder, debug_folder, f"image-{time.time()}.png")
     plt.savefig(filename)
-    plt.show()
+    
+    if debug:
+        plt.show()
 
 
 def gradient(y_path, t_path, x):
@@ -469,7 +474,7 @@ def createImagesDirectory(images_folder):
     except Exception as exp:
         print(exp)
 
-    if debug:
+    if debug or save_figures:
         # Create a folder for each of the basketballs
         for i in range(1, B+1):
             debug_folder = f"ball-{i}"
@@ -483,19 +488,25 @@ def createImagesDirectory(images_folder):
 
 def isDebugModeEnabled(argv):
     debug = False
+    save_images = False
     
     if len(argv) > 1:
-        if argv[1] == "-d":
+        if "-d" in argv:
             debug = True
-        else:
+        if "-f" in argv:
+            save_images = True
+
+        # We have parameters but all of them are unknown
+        if not debug and not save_images:
             print()
             print("Help")
             print("To run in debug mode: python balls.py -d")
             print("To run in release mode: python balls.py")
+            print("To save debug images in release mode: python balls.py -f")
 
             exit()
 
-    return debug
+    return debug, save_images
 
 
 def controller(s1_label, s2_label):
@@ -582,7 +593,10 @@ def displayCompletFlightPath(original_data, outcome, pre_collision_path, collisi
 
 
 
-debug = isDebugModeEnabled(sys.argv)
+debug = False
+# Save figures even in release mode
+save_figure = False
+debug, save_figures = isDebugModeEnabled(sys.argv)
 print("Debug mode: ", debug)
 
 # Number of balls
