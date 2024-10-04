@@ -54,9 +54,11 @@ def predictOutcome(x_path: Poly, y_path: Poly, t_path: Poly, start_time):
             y_center: y coordinate of the center of the ball if there is a collision
             post_collision_path: The flight path of the ball after a collision.
     '''
-    t = t_path(RR)
-    y = evaluate(y_path, t_path, RR)
-    if y < (HR - R) and t > start_time:
+    tl = t_path( RR)
+    tr = t_path(-RR)
+    yl = y_path(tl)
+    yr = y_path(tr)
+    if  yr < (HR - R) and yl < (HR - R) and tl > start_time and tl < tr:
         return "undershot", None, None
     
     outcome, x_collision, y_collision, t_collision = doesBallCollideWithRim(x_path, y_path, t_path, start_time)
