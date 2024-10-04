@@ -124,16 +124,27 @@ def modelPostCollisionPath(xs, ys, ts, old_path):
     normalized_gravity = normalized_gravity(0) / 2
 
     N = 5
+    # Start index
     # There is a bug in the code that causes the first point to be out of whack!
-    ys = ys[1:N] - normalized_gravity*ts[1:N]*ts[1:N]
+    S = 1
+    """
+        y(t) = gt^2 + ct + d
+        In this case g is known. It is the (negative)gravity in our little world. We can get its 
+        value from the current flight path.
+        (y, t) are predicted post-collision values. 
+        So, only c and d are unknown. We use least square to find them.
+        That is:
+            y(t) - gt^2 = ct + d
+    """
+    ys = ys[S:N] - normalized_gravity*ts[S:N]*ts[S:N]
 
-    x_path = Poly.fit(ts[1:N], xs[1:N], deg=1, domain=x_path.domain, window=x_path.window)
-    t_path = Poly.fit(xs[1:N], ts[1:N], deg=1, domain=t_path.domain, window=t_path.window)
-    y_path_ = Poly.fit(ts[1:N], ys, deg=1, domain=y_path.domain, window=y_path.window)
+    x_path = Poly.fit(ts[S:N], xs[S:N], deg=1, domain=x_path.domain, window=x_path.window)
+    t_path = Poly.fit(xs[S:N], ts[S:N], deg=1, domain=t_path.domain, window=t_path.window)
+    y_path_ = Poly.fit(ts[S:N], ys, deg=1, domain=y_path.domain, window=y_path.window)
     
     gravity = Poly([0, 0, normalized_gravity], domain=y_path.domain, window=y_path.window)
 
-    y = y_path_+gravity
+    y = y_path_ + gravity
     
     return x_path, t_path, y
 
