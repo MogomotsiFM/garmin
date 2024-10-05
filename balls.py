@@ -479,13 +479,13 @@ def gradientWRTx(y_path, t_path, x0):
 
 
 def rotate(xs, ys, theta):
-    reflected_coords = np.vstack([xs, ys])
-    reflected_coords = np.hsplit(reflected_coords, xs.size)
+    coords = np.vstack([xs, ys])
+    coords = np.hsplit(coords, xs.size)
 
     reverse_rot = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
-    coords_post_collision = reverse_rot@reflected_coords 
+    rotated_coords = reverse_rot@coords 
 
-    new_coords = np.hstack(coords_post_collision)
+    new_coords = np.hstack(rotated_coords)
 
     new_xs, new_ys = np.vsplit(new_coords, 2)
 
