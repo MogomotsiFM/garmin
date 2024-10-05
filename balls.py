@@ -283,6 +283,7 @@ def predictFlightPathPostCollision(x_path: Poly, y_path: Poly, t_path: Poly, cen
     x_r, y_r, t_collision = collision_pnt
     
     # Gradient at the point of collision
+    # This is given by the derivative of a circle
     ball_tangent_grad = - (x_r - x_center) / (y_r - y_center)
 
     # Explanation?
@@ -443,7 +444,7 @@ def plotDebugGraphs(x_path: Poly,
     # We want to plot the line that estimates the path followed by the ball at the time of collision
     x_center, y_center = center
     
-    path_tangent_grad = gradient(y_path, t_path, x_center)    
+    path_tangent_grad = gradientWRTx(y_path, t_path, x_center)
     c = y_center - x_center*path_tangent_grad
     # This plots the line that estimates the path followed by the ball at the time of collision
     axes.plot([-2, 2], [-2*path_tangent_grad + c, 2*path_tangent_grad + c], '-+', label="Flight path tangent")
@@ -467,11 +468,14 @@ def plotDebugGraphs(x_path: Poly,
         plt.show()
 
 
-def gradient(y_path, t_path, x):
+def gradientWRTx(y_path, t_path, x0):
+    """
+        Computes the derivate of y with respect to x at a 
+    """
     y_x = y_path(t_path)
     y_prime_x = y_x.deriv()
 
-    return y_prime_x(x)
+    return y_prime_x(x0)
 
 
 def rotate(xs, ys, theta):
