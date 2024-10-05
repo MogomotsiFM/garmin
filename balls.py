@@ -288,7 +288,7 @@ def predictFlightPathPostCollision(x_path: Poly, y_path: Poly, t_path: Poly, cen
 
     # Explanation?
     # Compute the normal of the collision surface
-    nx_circle, ny_circle = normal(y_path, t_path, x_r, y_r)
+    nx_circle, ny_circle = normal(ball_tangent_grad, x_r, y_r)
     deriv = y_path.deriv()
     deriv.window =  y_path.window
     deriv.domain =  y_path.domain
@@ -364,39 +364,38 @@ def reflect(dot, xs, ys):
         return xs, np.abs(ys)
 
 
-def normal(y_path: Poly, t_path: Poly, x, y):
-    return _vector(x, y, flight_path=False, y_path=y_path, t_path=t_path)
+def normal(ball_tangent_grad, x, y):
+    normal_gradient = -1 / ball_tangent_grad
+
+    # y = mx + c 
+    c = y - normal_gradient * x
+
+    # The normal of the wall should always point (relatively) towards +x-axis
+    x_after = x + 5
+    y_after = normal_gradient * x_after + c
+    
+    return unit_vector( (x, y), (x_after, y_after))
 
 
 def vector(x_path: Poly, y_path: Poly, x_before, y_before, t_collision):
-    return _vector(x_before, 
-                   y_before, 
-                   flight_path=True, 
-                   x_path=x_path, 
-                   y_path=y_path, 
-                   t_collision=t_collision)
-
-
-def _vector(x_before, y_before, flight_path=True, x_path=None, y_path=None, t_path=None, t_collision=None):
-    # y = mx + c
-    # c = y_before - grad*x_before
-
     # We need two point to compute a normal
-    if flight_path:
-        y_prime = y_path.deriv()
-        m = y_prime(t_collision)
-        c = y_before - m * t_collision
+    # We estimate the path of flight at the point of collision
+    # To be fair, this does not need to be exact!
+    y_prime = y_path.deriv()
+    m = y_prime(t_collision)
+    c = y_before - m * t_collision
 
-        # Take a step forward in time...
-        t = t_collision + 10
-        y_after = m * t + c
-        x_after = x_path(t)
+    # Take a step forward in time...
+    t = t_collision + 10
+    y_after = m * t + c
+    x_after = x_path(t)
 
-    else:
-        # The normal of the wall should always point (relatively) towards +x-axis
-        x_after = x_before + 5
+    return unit_vector((x_before, y_before), (x_after, y_after))
 
-        y_after = evaluate(y_path, t_path, x_after)
+
+def unit_vector(coord_before, coord_after):
+    x_before, y_before = coord_before
+    x_after, y_after = coord_after
     
     dx = x_after - x_before
     dy = y_after - y_before
