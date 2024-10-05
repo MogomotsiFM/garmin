@@ -408,6 +408,20 @@ def translate(xs, ys, trans):
     return xs + trans[0], ys + trans[1]
 
 
+def limit(xs, ys, ts=None):
+    """
+        Limit data to be plotted for better display.
+    """
+    cond = np.all([xs >= -5, ys >= -5, ys <= 15], axis=0)
+    xs = xs[cond]
+    ys = ys[cond]
+
+    if ts is not None:
+        ts = ts[cond]
+
+    return xs, ys, ts
+
+
 def plotDebugGraphs(x_path: Poly,
                     y_path: Poly,
                     t_path: Poly,
@@ -421,15 +435,22 @@ def plotDebugGraphs(x_path: Poly,
     figure, axes = plt.subplots()
     axes.set_aspect(1)
 
-    # We need this in order to display the entire flight path of the ball
-    axes.plot(x_path(ts), y_path(ts), '*', label="1. Path extrapolation beyond collision")
 
+    xs, ys, ts = limit(x_path(ts), y_path(ts), ts)
+
+    # We need this in order to display the entire flight path of the ball
+    axes.plot(xs, ys, '*', label="1. Path extrapolation beyond collision")
+
+    trans_xs, trans_ys, _ = limit(trans_xs, trans_ys)
     axes.plot(trans_xs, trans_ys, '+', label="2. Translated and rotated")
 
+    reflected_xs, reflected_ys, _ = limit(reflected_xs, reflected_ys)
     axes.plot(reflected_xs, reflected_ys, label="3. Reflection")
 
+    new_xs, new_ys, _ = limit(new_xs, new_ys)
     axes.plot(new_xs, new_ys, 'o', label="4. Undo rotation")
 
+    post_collision_xs, post_collision_ys, _ = limit(post_collision_xs, post_collision_ys)
     axes.plot(post_collision_xs, post_collision_ys, label="5. Post-collision path")
 
     # The tangent of the ball at the point of colllision
