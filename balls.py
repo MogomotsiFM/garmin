@@ -323,14 +323,7 @@ def predictFlightPathPostCollision(x_path: Poly, y_path: Poly, t_path: Poly, cen
     # Rotate the points such that the tangent of the ball at the collision point is parallel to the y-axis
     trans_xs, trans_ys = rotate(xs, ys, rotation_angle)        
     
-    # Reflect the path about the y-axis to model the ball bouncing off a wall
-    # This is really the what we wanted to get at!!
-    if dot < 0:
-        reflected_xs = np.abs(trans_xs)
-        reflected_ys = trans_ys
-    else:
-        reflected_ys = np.abs(trans_ys)
-        reflected_xs = trans_xs
+    reflected_xs, reflected_ys = reflect(dot, trans_xs, trans_ys)
 
     # Undo the first rotation
     new_xs, new_ys = rotate(reflected_xs, reflected_ys, -rotation_angle)
@@ -352,6 +345,22 @@ def predictFlightPathPostCollision(x_path: Poly, y_path: Poly, t_path: Poly, cen
             ball_tangent_grad)
 
     return post_collision_xs, post_collision_ys, ts
+
+
+def reflect(dot, xs, ys):
+    """
+        Input:
+            dot: The dot product between the normal of a surface and a unit vector pointing in 
+                 the direction of flight of the ball
+            (xs, ys): A set of points of a flight path that are projected past the collision point.
+        Output:
+            (reflected_xs, reflected_ys): A set of points reflected of the collision surface.
+    """
+    # This is really the what we wanted to get at!!
+    if dot < 0:
+        return np.abs(xs), ys
+    else:
+        return xs, np.abs(ys)
 
 
 def normal(y_path: Poly, t_path: Poly, x, y):
