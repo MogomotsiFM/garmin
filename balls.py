@@ -510,7 +510,7 @@ def createImagesDirectory(images_folder):
                 print(exp)
 
 
-def processCmdLineParameters(argv):
+def processCmdLineOptions(argv):
     debug = False
     save_images = False
     
@@ -620,7 +620,7 @@ def displayCompletFlightPath(original_data, outcome, pre_collision_path, collisi
 debug = False
 # Save figures even in release mode
 save_figure = False
-debug, save_figures = processCmdLineParameters(sys.argv)
+debug, save_figures = processCmdLineOptions(sys.argv)
 print("Debug mode: ", debug)
 
 # Number of balls
