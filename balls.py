@@ -371,8 +371,12 @@ def normal(ball_tangent_grad, x, y):
     c = y - normal_gradient * x
 
     # The normal of the wall should always point (relatively) towards +x-axis
-    x_after = x + 5
-    y_after = normal_gradient * x_after + c
+    if np.abs(ball_tangent_grad) > EPSILON:
+        x_after = x + 5
+        y_after = normal_gradient * x_after + c
+    else:
+        x_after = x
+        y_after = y - 5
     
     return unit_vector( (x, y), (x_after, y_after))
 
@@ -412,7 +416,7 @@ def limit(xs, ys, ts=None):
     """
         Limit data to be plotted for better display.
     """
-    cond = np.all([xs >= -5, ys >= -5, ys <= 15], axis=0)
+    cond = np.all([xs >= -5, xs <= 15, ys >= -5, ys <= 15], axis=0)
     xs = xs[cond]
     ys = ys[cond]
 
@@ -642,6 +646,9 @@ debug = False
 save_figure = False
 debug, save_figures = processCmdLineOptions(sys.argv)
 print("Debug mode: ", debug)
+
+# Used to compare two floats for equality
+EPSILON = 0.000001
 
 # Number of balls
 B = 6
