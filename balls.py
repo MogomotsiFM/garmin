@@ -23,7 +23,7 @@ def transformToCartesianCoordinates(dist1, dist2):
     xs = x.reshape((x.size,))
     ys = y.reshape((y.size,))
 
-    return xs, ys
+    return xs-0.1, ys
 
 
 def readDistances(data, header):
@@ -53,6 +53,9 @@ def predictOutcome(x_path: Poly, y_path: Poly, t_path: Poly, start_time):
             y_center: y coordinate of the center of the ball if there is a collision
             post_collision_path: The flight path of the ball after a collision.
     '''
+    print("\n\nStart time: ", start_time)
+    skip = False
+
     tl = t_path( RR)
     tr = t_path(-RR)
     yl = y_path(tl)
@@ -63,55 +66,101 @@ def predictOutcome(x_path: Poly, y_path: Poly, t_path: Poly, start_time):
     outcome, x_collision, y_collision, t_collision = doesBallCollideWithRim(x_path, y_path, t_path, start_time)
 
     if outcome == "score":
-        return "score", None, None
+        return "score", None, ballHitsGround(y_path, x_path, start_time)
     elif outcome == "miss":
         outcome, x_center, y_center, t_collision = findPositionOfBallCollidingWithBackboard(x_path, y_path, t_path, start_time)
         if outcome == "overshot":
-            return "overshot", None, None
+            return "overshot", None, ballHitsGround(y_path, x_path, start_time)
         elif outcome == "collision":
             collision_pnt = (-RR-DB, y_center, t_collision)
             #obstraction = "backboard"
         else: # outcome = "miss"
-            return "miss", None, None
+            return "miss", None, ballHitsGround(y_path, x_path, start_time)
     else: # outcome == "collision"
         x_center, y_center, t_collision = findPositionOfBallCollidingWithRimEdge(x_path, y_path, t_path, x_collision, y_collision, start_time)
         collision_pnt = (x_collision, y_collision, t_collision)
-        
-    xs, ys, ts = predictFlightPathPostCollision(x_path, y_path, t_path, (x_center, y_center), collision_pnt)
+
+        # If the ball bounces off the edge closest to the backboard
+        # it is possible that it collides with the backboard first.
+        if x_collision == -RR:
+            print("Does the ball collide with the backboard first?")
+            outcome0, x_center0, y_center0, t_collision0 = findPositionOfBallCollidingWithBackboard(x_path, y_path, t_path, start_time)
+
+            if outcome0 == "collision":
+                print("Outcome0: ", outcome0)
+
+                dx = x_center0 - (-RR - DB)
+                d1 = abs(dx)
+
+                dx = x_center - (-RR)
+                dy = y_center - HR
+                d2 = np.sqrt(dx*dx + dy*dy)
+
+                print("Compare")
+                print(t_collision0, t_collision)
+                print(d1, d2)
+
+                print("Time: ", np.abs(t_collision0 - t_collision))
+                if np.abs(t_collision0 - t_collision) < 0.01:
+                    print("In here....")
+                    e = 10*t_collision
+                    s = t_collision
+                    N = np.abs(e - s)
+                    ts = np.linspace(t_collision, 10*t_collision, 10*int(N))
+                    
+                    c = x_center - t_collision
+                    xs = ts[0:ts.size-1] + c
+
+                    c = y_center - t_collision
+                    ys = ts[0:ts.size-1] + c
+
+                    skip = True
+
+                elif t_collision0 < t_collision:
+                    print("Yes, it does!")
+                    collision_pnt = (-RR-DB, y_center0, t_collision0)
+                    x_center = x_center0
+                    y_center = y_center0
+                    t_collision = t_collision0
+    
+    print("Collision time: ", t_collision)
+
+    if not skip:
+        print("Do not skip")
+        # By the time we get to this point we are sure we have had a collision
+        xs, ys, ts = predictFlightPathPostCollision(x_path, y_path, t_path, (x_center, y_center), collision_pnt)
+
+    # Precollision points
+    N = np.ceil(t_collision - start_time)
+    N = 10*int(N)
+    ts_ = np.linspace(start_time, t_collision, num=N)
+    # ts_ = ts_[1:N]
+    xs_, ys_ = x_path(ts_), y_path(ts_)
 
     collision_pnts = []
-    collision_pnts.append((x_center, y_center))
+    collision_pnts.append((x_center, y_center, t_collision))
 
-    if outcome == "collision":
-        old_path = (x_path, y_path, t_path)
-        x_path, t_path, y_path = modelPostCollisionPath(xs, ys, ts, old_path)
+    old_path = (x_path, y_path, t_path)
+    x_path_pc, t_path_pc, y_path_pc = modelPostCollisionPath(xs, ys, ts, old_path)
         
-        # Only the first few data points after the collision are accurate.
-        # The further we go from the collision the more they drift away from the true path.
-        # Hence, it is better to replace the rest with the model
-        xs = x_path(ts)
-        ys = y_path(ts)
+    a = 0.01
+    b = 1
+    start = (b*ts[0] + a*ts[1]) / (a+b)
+    # start = t_collision
+    out_, collision_pnts_, paths = predictOutcome(x_path_pc, y_path_pc, t_path_pc, start)
+
+    x_, y_, t_ = paths
+
+    if collision_pnts_:
+        collision_pnts.extend(collision_pnts_)
         
-        start = (ts[0] + ts[1])/2
-        out_, collision_pnts_, paths = predictOutcome(x_path, y_path, t_path, start)
-                
-        if paths:
-            collision_pnts.extend(collision_pnts_)
+    N = x_.size-1
+    print("Final point: ", x_[N], y_[N])
+    xs = np.hstack([xs_, x_])
+    ys = np.hstack([ys_, y_])
+    ts = np.hstack([ts_, t_])
 
-            x_, y_, t_ = paths
-
-            condition = ts <= start
-            xs = xs[condition]
-            ys = ys[condition]
-            ts = ts[condition]
-            
-            xs = np.hstack([xs, x_])
-            ys = np.hstack([ys, y_])
-            ts = np.hstack([ts, t_])
-
-        return out_, collision_pnts, (xs, ys, ts)
-
-    return outcome, collision_pnts, (xs, ys, ts)
+    return out_, collision_pnts, (xs, ys, ts)
 
 
 def modelPostCollisionPath(xs, ys, ts, old_path):
@@ -123,10 +172,10 @@ def modelPostCollisionPath(xs, ys, ts, old_path):
     normalized_gravity = y_path.deriv(2)
     normalized_gravity = normalized_gravity(0) / 2
 
-    N = 5
+    N = 10
     # Start index
     # There is a bug in the code that causes the first point to be out of whack!
-    S = 1
+    S = 0
     """
         y(t) = gt^2 + ct + d
         In this case g is known. It is the (negative)gravity in our little world. We can get its 
@@ -149,6 +198,34 @@ def modelPostCollisionPath(xs, ys, ts, old_path):
     return x_path, t_path, y
 
 
+def ballHitsGround(y_path: Poly, x_path: Poly, start_time):
+    """
+        Generates the rest of the path from start_time until the ball hits the ground.
+
+        Output:
+            xs, ys
+    """
+    roots_t = y_path.roots()
+
+    real_roots_t = np.extract(np.isreal(roots_t), roots_t)
+
+    t = np.extract(real_roots_t>start_time, real_roots_t)
+
+    print("Ground: ", real_roots_t)
+    print("Ground time interval: ", start_time, t)
+
+    stop_time = t[0]
+
+    print("Ground end: ", x_path(stop_time), y_path(stop_time))
+
+    N = np.ceil(stop_time - start_time)
+    N = 10*int(N)
+    ts = np.linspace(start_time, stop_time, num=N)
+    # ts = ts[1:N]
+
+    return x_path(ts), y_path(ts), ts
+
+
 def doesBallCollideWithRim(x_path: Poly, y_path: Poly, t_path: Poly, start_time):
     '''
         We want find to the point of intersection of two equations
@@ -160,6 +237,8 @@ def doesBallCollideWithRim(x_path: Poly, y_path: Poly, t_path: Poly, start_time)
             x_rim, y_rim: An edge of the rim that the ball collides with,
             t: The time at which the collision takes place.
     '''
+    print("R")
+
     obj = y_path - HR
 
     roots_t = obj.roots()
@@ -203,6 +282,8 @@ def findPositionOfBallCollidingWithRimEdge(x_path: Poly, y_path: Poly, t_path: P
             (x_rim, y_rim): The cartesian coordinate of an edge of the rim
             start_time:
     '''
+    print("E")
+
     # Let the Polynomial package do the heavy lifting
     #   Construct the equation of a circle using the Polynomial package
     #       (x - x_c)**2 + (y - y_c)**2 = R*R
@@ -247,6 +328,7 @@ def findPositionOfBallCollidingWithBackboard(x_path: Poly, y_path: Poly, t_path:
             y_c: The y coordinate of the ball when it first makes contact with the backboard
             t_c: The time the collision took place
     '''
+    print("B")
     # Because the straight line is the y-axis, the equation of the circle is slightly simpler:
     #   (x0 - x_c)**2 + (y - y_c) = R*R
     # (x_c, y_c) is the center of the ball (circle),
@@ -259,7 +341,7 @@ def findPositionOfBallCollidingWithBackboard(x_path: Poly, y_path: Poly, t_path:
 
     t_collision = t_path(x_c)
 
-    if t_collision <= start_time:
+    if t_collision < start_time:
         return "miss", None, None, None
 
     y_c = y_path(t_collision)
@@ -304,19 +386,16 @@ def predictFlightPathPostCollision(x_path: Poly, y_path: Poly, t_path: Poly, cen
     else:
         rotation_angle = -theta
 
-    # Translation: We rotate about the point of collision
-    trans = np.array(center, ndmin=2)
-    trans = trans.transpose()
-
     # Sample the path after the point of collision
-    # This simulates tracking the ball past the collision point
-    # The end time of our simulation is not easy to estimate because we do not even know the unit of time!
-    start = t_collision
-    end = 5*t_collision
-    num_points = np.ceil( (end - start) / (DELTA_T/10) + 1)
-    ts, dt = np.linspace(start, end, int(num_points), retstep=True)
-    xs = x_path(ts)
-    ys = y_path(ts)
+    # This simulates tracking the ball past the collision point until it hits the ground
+    xs, ys, ts = ballHitsGround(y_path, x_path, t_collision)
+
+    # Translation: We rotate about the point of collision
+    # This commented piece of code is how we should be computing the translation, 
+    # But, the actual values are computed using a model
+    trans = np.array(center, ndmin=2)
+    #trans = np.array([xs[0], ys[0]], ndmin=2)
+    trans = trans.transpose()
 
     # Translate the points past the predicted collision point so that they can be rotated about the axis
     xs, ys = translate(xs, ys, -trans)
@@ -355,7 +434,7 @@ def reflect(dot, xs, ys):
                  the direction of flight of the ball
             (xs, ys): A set of points of a flight path that are projected past the collision point.
         Output:
-            (reflected_xs, reflected_ys): A set of points reflected of the collision surface.
+            A set of points reflected of the collision surface.
     """
     # This is really the what we wanted to get at!!
     if dot < 0:
@@ -383,7 +462,7 @@ def normal(ball_tangent_grad, x, y):
 
 def vector(x_path: Poly, y_path: Poly, x_before, y_before, t_collision):
     # We need two point to compute a normal
-    # We estimate the path of flight at the point of collision
+    # We approximate the path of flight at the point of collision using a straight line
     # To be fair, this does not need to be exact!
     y_prime = y_path.deriv()
     m = y_prime(t_collision)
@@ -439,7 +518,8 @@ def plotDebugGraphs(x_path: Poly,
     figure, axes = plt.subplots()
     axes.set_aspect(1)
 
-
+    N = np.ceil(ts[0])
+    ts = np.hstack([np.linspace(0, ts[0], 5*int(N)), ts])
     xs, ys, ts = limit(x_path(ts), y_path(ts), ts)
 
     # We need this in order to display the entire flight path of the ball
@@ -481,6 +561,8 @@ def plotDebugGraphs(x_path: Poly,
     # Show the position of the ball at the time of the collision
     circle = patches.Circle(center, R, fill=False, label="Ball")
     axes.add_artist(circle)
+
+    axes.plot([-RR-DB, -RR-DB], [HR, HR+HB])
 
     axes.legend(shadow=True)
     axes.set_title("Generating post-collision path")
@@ -617,12 +699,14 @@ def displayCompletFlightPath(original_data, outcome, pre_collision_path, collisi
         axes.plot([RR, RR], [HR, HR+R], label="Vertical rim clearance")
 
     if collision_pnts:
-        for x_c, y_c in collision_pnts:
+        for x_c, y_c, _ in collision_pnts:
             circle = patches.Circle((x_c, y_c), R, fill=False, label="Ball(s) at collision point", color="red")
             axes.add_artist(circle)
 
+        # Time of first collision
+        t0 = collision_pnts[0][2]
         xs, ys, ts = post_collision_path
-        condition = np.all([xs >= -1, xs <= x[0], ys >= 0], axis=0)
+        condition = np.all([xs >= -1, xs <= x[0], ys >= 0, ts >= t0], axis=0)
         xs = xs[condition]
         ys = ys[condition]
 
@@ -688,6 +772,7 @@ images_folder = "images"
 createImagesDirectory(images_folder)
 
 for i in range(1, B+1):
+# for i in range(3, 4):
     print(f"Ball: ", i)
     debug_folder = f"ball-{i}"
 
