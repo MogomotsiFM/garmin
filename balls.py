@@ -23,7 +23,7 @@ def transformToCartesianCoordinates(dist1, dist2):
     xs = x.reshape((x.size,))
     ys = y.reshape((y.size,))
 
-    return xs-0.1, ys
+    return xs, ys
 
 
 def readDistances(data, header):
@@ -83,26 +83,10 @@ def predictOutcome(x_path: Poly, y_path: Poly, t_path: Poly, start_time):
         # If the ball bounces off the edge closest to the backboard
         # it is possible that it collides with the backboard first.
         if x_collision == -RR:
-            print("Does the ball collide with the backboard first?")
             outcome0, x_center0, y_center0, t_collision0 = findPositionOfBallCollidingWithBackboard(x_path, y_path, t_path, start_time)
 
             if outcome0 == "collision":
-                print("Outcome0: ", outcome0)
-
-                dx = x_center0 - (-RR - DB)
-                d1 = abs(dx)
-
-                dx = x_center - (-RR)
-                dy = y_center - HR
-                d2 = np.sqrt(dx*dx + dy*dy)
-
-                print("Compare")
-                print(t_collision0, t_collision)
-                print(d1, d2)
-
-                print("Time: ", np.abs(t_collision0 - t_collision))
                 if np.abs(t_collision0 - t_collision) < 0.01:
-                    print("In here....")
                     e = 10*t_collision
                     s = t_collision
                     N = np.abs(e - s)
@@ -117,7 +101,6 @@ def predictOutcome(x_path: Poly, y_path: Poly, t_path: Poly, start_time):
                     skip = True
 
                 elif t_collision0 < t_collision:
-                    print("Yes, it does!")
                     collision_pnt = (-RR-DB, y_center0, t_collision0)
                     x_center = x_center0
                     y_center = y_center0
@@ -263,8 +246,7 @@ def doesBallCollideWithRim(x_path: Poly, y_path: Poly, t_path: Poly, start_time)
         d2 = np.abs( x_path(real_roots_t) + RR )
         d2, idx2 = np.min(d2), np.argmin(d2)
 
-        max = (R+RR)*(R+RR)
-        if d1 < max or d2 < max:
+        if d1 < R or d2 < R:
             if d1 < d2:
                 return "collision", RR, HR, real_roots_t[idx1]
             else:
@@ -772,7 +754,6 @@ images_folder = "images"
 createImagesDirectory(images_folder)
 
 for i in range(1, B+1):
-# for i in range(3, 4):
     print(f"Ball: ", i)
     debug_folder = f"ball-{i}"
 
